@@ -1,0 +1,47 @@
+/**
+ * Header Component
+ * 상단 네비게이션 바
+ */
+
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+export function Header() {
+  const pathname = usePathname();
+
+  const navItems = [
+    { name: "딜 전광판", href: "/dashboard" },
+    { name: "챗 매니저", href: "/chats" },
+    { name: "통계", href: "/analytics" },
+  ];
+
+  return (
+    <header className="border-b bg-white">
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center justify-between">
+          <Link href="/dashboard" className="text-xl font-bold">
+            Harold Trading
+          </Link>
+
+          <nav className="flex space-x-6">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`text-sm font-medium transition-colors hover:text-gray-900 ${
+                  pathname === item.href
+                    ? "text-gray-900 border-b-2 border-gray-900"
+                    : "text-gray-500"
+                }`}
+              >
+                {item.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
+    </header>
+  );
+}

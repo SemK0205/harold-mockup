@@ -1,0 +1,248 @@
+/**
+ * Harold Web Dashboard - TypeScript Type Definitions
+ * Pydantic 모델을 TypeScript로 변환
+ */
+
+// ============================================
+// Trading Session Types
+// ============================================
+
+export interface TradingSession {
+  session_id: string; // UUID
+  customer_room_name: string;
+  original_inquiry: string;
+  port: string | null;
+  fuel_type: string | null;
+  vessel_name: string | null;
+  quantity: string | null;
+  delivery_date: string | null;
+  requested_traders: string[]; // JSON array
+  quotes: Quote[]; // JSONB array
+  status: "active" | "closed";
+  created_at: string; // ISO timestamp
+  closed_at: string | null; // ISO timestamp
+}
+
+export interface Quote {
+  trader: string;
+  message: string;
+  price: string;
+  received_at: string; // ISO timestamp
+  status?: string;
+  details?: string;
+  notes?: string;
+}
+
+// ============================================
+// AI Suggestion Types
+// ============================================
+
+export interface AISuggestion {
+  id: number;
+  room_name: string;
+  sender: string;
+  message: string;
+  category: AICategory;
+  confidence: number; // 0.0 ~ 1.0
+  suggestions: AIOption[];
+  original_message: OriginalMessage | null;
+  trading_context: TradingContext | null;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason: string | null;
+  created_at: string; // ISO timestamp
+}
+
+export type AICategory =
+  | "inquiry"
+  | "quote"
+  | "approval"
+  | "rejection"
+  | "negotiation"
+  | "no_offer"
+  | "greeting"
+  | "acknowledgment"
+  | "unknown";
+
+export interface AIOption {
+  option: number;
+  action: "send_to_suppliers" | "reply_to_customer" | "ignore" | "send_multiple";
+  targets: AITarget[] | string[]; // send_multiple uses AITarget[], others use string[]
+  message: string;
+  reason: string;
+  isSelected?: boolean; // Frontend state
+}
+
+export interface AITarget {
+  room: string;
+  message: string;
+}
+
+export interface OriginalMessage {
+  room_name: string;
+  sender: string;
+  message: string;
+  created_at: string;
+}
+
+export interface TradingContext {
+  vessel_name: string | null;
+  port: string | null;
+  delivery_date: string | null;
+  fuel_type: string | null;
+  quantity: string | null;
+}
+
+// FullContext 완성도 확인을 위한 헬퍼 타입
+export interface FullContextStatus {
+  vessel_name: "complete" | "missing";
+  port: "complete" | "missing";
+  delivery_date: "complete" | "missing";
+  fuel_type: "complete" | "missing";
+  quantity: "complete" | "missing";
+}
+
+// ============================================
+// Chat Message Types
+// ============================================
+
+export interface ChatMessage {
+  message_id: number;
+  room_name: string;
+  sender: string;
+  message: string;
+  package_name: "com.kakao.talk" | "com.kakao.yellowid" | "com.whatsapp" | "com.wechat";
+  direction: "incoming" | "outgoing";
+  timestamp: string; // ISO timestamp
+  created_at: string; // ISO timestamp
+}
+
+// ============================================
+// Outgoing Message Types
+// ============================================
+
+export interface OutgoingMessage {
+  id: number;
+  target_room_name: string;
+  message_content: string;
+  package_name: "com.kakao.talk" | "com.kakao.yellowid" | "com.whatsapp" | "com.wechat";
+  status: "pending" | "sent" | "failed";
+  created_at: string; // ISO timestamp
+  sent_at: string | null; // ISO timestamp
+}
+
+// ============================================
+// Room Classification Types
+// ============================================
+
+export type RoomType = "trader" | "customer" | "unknown";
+
+export interface RoomInfo {
+  room_name: string;
+  room_type: RoomType;
+  platform: "kakao" | "kakao_biz" | "whatsapp" | "wechat";
+}
+
+// ============================================
+// API Request/Response Types
+// ============================================
+
+// AI Suggestion Approval
+export interface ApproveAISuggestionRequest {
+  suggestion_id: number;
+  selected_options: number[]; // 선택된 옵션 번호 배열
+}
+
+export interface ApproveAISuggestionResponse {
+  success: boolean;
+  message: string;
+  outgoing_message_ids?: number[];
+}
+
+// AI Suggestion Rejection
+export interface RejectAISuggestionRequest {
+  suggestion_id: number;
+  rejection_reason: string | null;
+}
+
+export interface RejectAISuggestionResponse {
+  success: boolean;
+  message: string;
+}
+
+// Send Chat Message
+export interface SendChatMessageRequest {
+  room_name: string;
+  message: string;
+  package_name: "com.kakao.talk" | "com.kakao.yellowid" | "com.whatsapp" | "com.wechat";
+}
+
+export interface SendChatMessageResponse {
+  success: boolean;
+  message: string;
+  outgoing_message_id?: number;
+}
+
+// Custom AI Option
+export interface CustomAIOptionRequest {
+  session_id: string;
+  custom_message: string;
+  target_rooms: string[];
+  package_name: "com.kakao.talk" | "com.kakao.yellowid" | "com.whatsapp" | "com.wechat";
+}
+
+export interface CustomAIOptionResponse {
+  success: boolean;
+  message: string;
+  outgoing_message_ids?: number[];
+}
+
+// ============================================
+// Dashboard Data Types
+// ============================================
+
+// Deal Scoreboard Row
+export interface DealScoreboardRow {
+  session_id: string;
+  vessel_name: string | null;
+  eta: string | null; // delivery_date
+  port: string | null;
+  fuel1: string | null; // Primary fuel type
+  fuel2: string | null; // Secondary fuel type (if multiple)
+  customer_room_name: string;
+  platform: "kakao" | "kakao_biz" | "whatsapp" | "wechat";
+  status: "active" | "closed";
+  created_at: string;
+}
+
+// Analytics Data
+export interface AnalyticsData {
+  total_trades: number;
+  completed_trades: number;
+  total_revenue: number;
+  revenue_by_country: Record<string, number>;
+  revenue_by_port: Record<string, number>;
+  revenue_by_trader: Record<string, number>;
+  trades_by_month: { month: string; count: number; revenue: number }[];
+}
+
+// ============================================
+// Utility Types
+// ============================================
+
+export interface PaginationParams {
+  page: number;
+  limit: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface ErrorResponse {
+  error: string;
+  detail?: string;
+}
