@@ -138,8 +138,9 @@ export type RoomType = "trader" | "customer" | "unknown";
 
 export interface RoomInfo {
   room_name: string;
-  room_type: RoomType;
-  platform: "kakao" | "kakao_biz" | "whatsapp" | "wechat";
+  room_type?: RoomType;
+  platform: "com.kakao.talk" | "com.kakao.yellowid" | "com.whatsapp" | "com.wechat";
+  category?: "buy" | "sell" | "other" | null;
 }
 
 // ============================================
@@ -173,7 +174,7 @@ export interface RejectAISuggestionResponse {
 export interface SendChatMessageRequest {
   room_name: string;
   message: string;
-  package_name: "com.kakao.talk" | "com.kakao.yellowid" | "com.whatsapp" | "com.wechat";
+  platform: "kakao" | "kakao_biz" | "whatsapp" | "wechat";
 }
 
 export interface SendChatMessageResponse {
@@ -245,4 +246,72 @@ export interface PaginatedResponse<T> {
 export interface ErrorResponse {
   error: string;
   detail?: string;
+}
+
+// ============================================
+// Deal Scoreboard Types
+// ============================================
+
+export interface DealScoreboard {
+  id: number;
+  session_id: string;
+  customer_room_name: string;
+  vessel_name: string | null;
+  port: string | null;
+  fuel_type: string | null;
+  quantity: string | null;
+  delivery_date: string | null;
+  status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_failed" | "cancelled";
+  created_at: string;
+  closed_at: string | null;
+  final_price: number | null;
+  selected_trader: string | null;
+  closing_reason: string | null;
+  total_quotes_received: number;
+  negotiation_rounds: number;
+  duration_minutes: number;
+  response_time_minutes: number | null;
+  quote_count: number;
+  last_quote_time: string | null;
+}
+
+export interface DealStatistics {
+  overall: {
+    total_deals: number;
+    active_deals: number;
+    quoted_deals: number;
+    negotiating_deals: number;
+    successful_deals: number;
+    failed_deals: number;
+    cancelled_deals: number;
+    success_rate: number;
+    avg_response_time_minutes: number;
+    avg_deal_duration_minutes: number;
+    total_revenue: number;
+    today_revenue: number;
+  };
+  by_port: Array<{
+    port: string;
+    total_deals: number;
+    successful_deals: number;
+    total_revenue: number;
+    avg_deal_value: number;
+    avg_duration_minutes: number;
+  }>;
+  by_trader: Array<{
+    trader: string;
+    total_deals: number;
+    total_revenue: number;
+    avg_deal_value: number;
+    avg_negotiation_rounds: number;
+    fastest_response: string;
+    avg_response_minutes: number;
+  }>;
+  daily_trend: Array<{
+    date: string;
+    total_deals: number;
+    successful_deals: number;
+    failed_deals: number;
+    revenue: number;
+  }>;
 }

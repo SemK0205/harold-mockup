@@ -21,8 +21,13 @@ export function Header() {
     <header className="border-b bg-white">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="text-xl font-bold">
-            Harold Trading
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <img
+              src="/SP_logo.png"
+              alt="Seanergy Partner"
+              className="w-10 h-10 rounded-full object-cover"
+            />
+            <span className="text-xl font-bold">Harold Trading</span>
           </Link>
 
           <nav className="flex space-x-6">
