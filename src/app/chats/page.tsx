@@ -93,7 +93,8 @@ export default function ChatsPage() {
   // SSE 실시간 메시지 구독 (마운트 시 1회만 연결)
   useEffect(() => {
     console.log("🔌 SSE 연결 시작...");
-    const eventSource = new EventSource("http://220.76.122.226:59234/sse/messages");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:59234";
+    const eventSource = new EventSource(`${apiUrl}/sse/messages`);
 
     eventSource.addEventListener("connected", (event) => {
       console.log("✅ SSE 연결 성공:", event.data);
