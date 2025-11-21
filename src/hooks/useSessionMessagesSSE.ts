@@ -106,6 +106,8 @@ export function useSessionMessagesSSE(options: UseSessionMessagesSSEOptions): Us
             message: messageData.message,
             timestamp: messageData.created_at,
             package_name: messageData.platform || "chat_kakao",
+            direction: "incoming",
+            created_at: messageData.created_at,
           };
 
           setMessages(prev => {
