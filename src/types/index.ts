@@ -15,6 +15,8 @@ export interface TradingSession {
   fuel_type: string | null;
   vessel_name: string | null;
   quantity: string | null;
+  fuel_type2: string | null;
+  quantity2: string | null;
   delivery_date: string | null;
   requested_traders: string[]; // JSON array
   quotes: Quote[]; // JSONB array
@@ -88,8 +90,11 @@ export interface TradingContext {
   vessel_name: string | null;
   port: string | null;
   delivery_date: string | null;
+  eta: string | null;  // alias for delivery_date (API returns as eta)
   fuel_type: string | null;
   quantity: string | null;
+  fuel_type2: string | null;
+  quantity2: string | null;
 }
 
 // FullContext 완성도 확인을 위한 헬퍼 타입
@@ -151,6 +156,7 @@ export interface RoomInfo {
 export interface ApproveAISuggestionRequest {
   suggestion_id: number;
   selected_options: number[]; // 선택된 옵션 번호 배열
+  selected_targets?: Record<string, string[]>; // "옵션번호" -> 선택된 타겟 목록
 }
 
 export interface ApproveAISuggestionResponse {
@@ -260,6 +266,8 @@ export interface DealScoreboard {
   port: string | null;
   fuel_type: string | null;
   quantity: string | null;
+  fuel_type2: string | null;
+  quantity2: string | null;
   delivery_date: string | null;
   status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_failed" | "cancelled";
   created_at: string;

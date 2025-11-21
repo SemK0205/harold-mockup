@@ -5,11 +5,12 @@
 
 "use client";
 
-import { useSessionMessages, useSendMessage } from "@/lib/api/queries";
+import { useSendMessage } from "@/lib/api/queries";
+import { useSessionMessagesSSE } from "@/hooks/useSessionMessagesSSE";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { ChatMessage } from "@/types";
 
 interface ChatTabProps {
@@ -18,12 +19,106 @@ interface ChatTabProps {
   traderRooms: string[];
 }
 
+// 우리 회사 발신자 목록 (오른쪽에 표시)
+const OUR_COMPANY_SENDERS = [
+  "씨너지파트너 주식회사",
+  "씨너지파트너",
+  "씨너지파트너AI",
+  "Seanergy AI",
+  "Harold AI",
+  "Harold",
+  "Yong Oh",
+  "나",
+  "김성원",
+  "Kenn Kwon",
+  "Kenn Kwon (SEANERGY PARTNER)",
+  "Yong",
+  "seanergyAI",
+  "Me"  // 발신 메시지
+];
+
 export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) {
-  const { data: messages, isLoading } = useSessionMessages(sessionId);
+  const { messages, isLoading } = useSessionMessagesSSE({ sessionId });
   const sendMessageMutation = useSendMessage();
+
+  // 우리 회사 발신자인지 확인
+  const isOurCompanySender = (sender: string): boolean => {
+    return OUR_COMPANY_SENDERS.includes(sender);
+  };
 
   const [selectedRoom, setSelectedRoom] = useState<string>(customerRoom);
   const [messageText, setMessageText] = useState("");
+
+  // 스크롤 관련 refs
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
+  const isUserScrolledUpRef = useRef<boolean>(false);
+
+  // 맨 아래로 스크롤
+  const scrollToBottom = (smooth = false) => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
+  };
+
+  // 사용자가 스크롤을 위로 올렸는지 확인
+  const handleScroll = () => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      isUserScrolledUpRef.current = !isAtBottom;
+    }
+  };
+
+  // 메시지 변경 시 스크롤 처리
+  const currentMessages = messages?.filter((msg) => msg.room_name === selectedRoom) || [];
+
+  useEffect(() => {
+    const currentCount = currentMessages.length;
+    const prevCount = prevMessageCountRef.current;
+
+    // 처음 로드시 또는 방 변경시 맨 아래로
+    if (prevCount === 0 && currentCount > 0) {
+      scrollToBottom();
+    }
+    // 새 메시지 도착시 (맨 아래에 있을 때만 자동 스크롤)
+    else if (currentCount > prevCount && !isUserScrolledUpRef.current) {
+      scrollToBottom(true);
+    }
+
+    prevMessageCountRef.current = currentCount;
+  }, [currentMessages.length, selectedRoom]);
+
+  // 방 변경시 스크롤 초기화
+  useEffect(() => {
+    prevMessageCountRef.current = 0;
+    isUserScrolledUpRef.current = false;
+    setTimeout(() => scrollToBottom(), 0);
+  }, [selectedRoom]);
+
+  const getRoomMessages = (roomName: string): ChatMessage[] => {
+    if (!messages) return [];
+    return messages.filter((msg) => msg.room_name === roomName);
+  };
+
+  // 선택된 방의 플랫폼 가져오기 (메시지에서 추출)
+  const getRoomPlatform = (roomName: string): "kakao" | "kakao_biz" | "whatsapp" | "wechat" => {
+    const roomMessages = getRoomMessages(roomName);
+    if (roomMessages.length > 0) {
+      const packageName = roomMessages[0].package_name;
+      const platformMap: Record<string, "kakao" | "kakao_biz" | "whatsapp" | "wechat"> = {
+        "com.kakao.talk": "kakao",
+        "com.kakao.yellowid": "kakao_biz",
+        "com.whatsapp": "whatsapp",
+        "com.wechat": "wechat",
+      };
+      return platformMap[packageName] || "kakao";
+    }
+    return "kakao";
+  };
 
   const handleSendMessage = async () => {
     if (!messageText.trim()) return;
@@ -32,17 +127,13 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
       await sendMessageMutation.mutateAsync({
         room_name: selectedRoom,
         message: messageText,
+        platform: getRoomPlatform(selectedRoom),
       });
       setMessageText("");
       alert("메시지 전송 완료");
     } catch (error) {
       alert("메시지 전송 실패: " + String(error));
     }
-  };
-
-  const getRoomMessages = (roomName: string): ChatMessage[] => {
-    if (!messages) return [];
-    return messages.filter((msg) => msg.room_name === roomName);
   };
 
   if (isLoading) return <div>로딩 중...</div>;
@@ -74,41 +165,59 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
       </div>
 
       {/* 채팅 메시지 목록 */}
-      <div className="border rounded-lg p-4 h-96 overflow-y-auto space-y-3 bg-gray-50">
-        {getRoomMessages(selectedRoom).length === 0 ? (
+      <div
+        ref={chatContainerRef}
+        onScroll={handleScroll}
+        className="border rounded-lg p-4 h-96 overflow-y-auto space-y-3 bg-gray-50"
+      >
+        {currentMessages.length === 0 ? (
           <div className="text-center text-gray-500 py-12">
             메시지가 없습니다
           </div>
         ) : (
-          getRoomMessages(selectedRoom).map((msg) => (
-            <div
-              key={msg.message_id}
-              className={`flex ${
-                msg.sender === "Harold" ? "justify-end" : "justify-start"
-              }`}
-            >
+          currentMessages.map((msg) => {
+            const isOurMessage = isOurCompanySender(msg.sender);
+            return (
               <div
-                className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                  msg.sender === "Harold"
-                    ? "bg-blue-500 text-white"
-                    : "bg-white border"
+                key={msg.message_id}
+                className={`flex items-end gap-2 ${
+                  isOurMessage ? "justify-end" : "justify-start"
                 }`}
               >
-                <div className="flex items-center space-x-2 mb-1">
-                  <span className="text-xs font-medium">{msg.sender}</span>
-                  <span className="text-xs opacity-70">
-                    {new Date(msg.timestamp).toLocaleString("ko-KR", {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+                {/* 우리 회사 로고 (왼쪽) */}
+                {isOurMessage && (
+                  <img
+                    src="/SP_logo.png"
+                    alt="Seanergy Partner"
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                )}
+
+                <div
+                  className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                    isOurMessage
+                      ? "bg-blue-100 text-blue-900 border border-blue-200"
+                      : "bg-white border border-gray-200"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className={`text-xs font-medium ${isOurMessage ? "text-blue-700" : "text-gray-700"}`}>
+                      {msg.sender}
+                    </span>
+                    <span className="text-xs opacity-60">
+                      {new Date(msg.timestamp).toLocaleString("ko-KR", {
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                 </div>
-                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

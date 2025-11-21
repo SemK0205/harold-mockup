@@ -173,10 +173,15 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                   <div className="space-y-1">
                     {deal.fuel_type && (
                       <div className="text-gray-700">
-                        {deal.fuel_type} {deal.quantity && `${deal.quantity}`}
+                        {deal.fuel_type} {deal.quantity && `${deal.quantity}MT`}
                       </div>
                     )}
-                    {!deal.fuel_type && "-"}
+                    {deal.fuel_type2 && (
+                      <div className="text-gray-700">
+                        {deal.fuel_type2} {deal.quantity2 && `${deal.quantity2}MT`}
+                      </div>
+                    )}
+                    {!deal.fuel_type && !deal.fuel_type2 && "-"}
                   </div>
                 </td>
 

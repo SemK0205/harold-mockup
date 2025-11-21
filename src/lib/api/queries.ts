@@ -144,10 +144,10 @@ export const useSendCustomOption = () => {
 // Chat Messages Queries
 // ============================================
 
-export const useChatMessages = (roomName: string, page: number = 1, limit: number = 50) => {
+export const useChatMessages = (roomName: string, platform: string = "com.kakao.talk", page: number = 1, limit: number = 50) => {
   return useQuery({
     queryKey: queryKeys.chatMessages.byRoom(roomName, page, limit),
-    queryFn: () => chatMessagesAPI.getMessagesByRoom(roomName, page, limit),
+    queryFn: () => chatMessagesAPI.getMessagesByRoom(roomName, platform, page, limit),
     enabled: !!roomName,
   });
 };

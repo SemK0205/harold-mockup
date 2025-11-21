@@ -9,42 +9,39 @@ import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DealTable } from "@/components/dashboard/DealTable";
 import { DealStatistics } from "@/components/dashboard/DealStatistics";
+import { DealTimeline } from "@/components/dashboard/DealTimeline";
 import { DealDetailModal } from "@/components/dashboard/DealDetailModal";
+import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { useQuery } from "@tanstack/react-query";
 import { dealScoreboardAPI } from "@/lib/api/endpoints";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DealScoreboard as DealScoreboardType, TradingSession } from "@/types";
+import { useDealsSSE } from "@/hooks/useDealsSSE";
 
 export default function DashboardPage() {
-  const [viewMode, setViewMode] = useState<"pipeline" | "statistics">("pipeline");
+  const [viewMode, setViewMode] = useState<"table" | "timeline" | "statistics">("table");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [portFilter, setPortFilter] = useState<string>("");
   const [customerFilter, setCustomerFilter] = useState<string>("");
   const [selectedDeal, setSelectedDeal] = useState<DealScoreboardType | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 딜 데이터 조회
-  const { data: dealsData, isLoading: dealsLoading } = useQuery({
-    queryKey: ["deals", "scoreboard", statusFilter, portFilter, customerFilter],
-    queryFn: () =>
-      dealScoreboardAPI.getDeals({
-        status: statusFilter || undefined,
-        port: portFilter || undefined,
-        customer: customerFilter || undefined,
-        limit: 500,
-      }),
-    refetchInterval: 5000, // 5초마다 자동 새로고침
+  // SSE 연결
+  const { deals: sseDeals, isConnected } = useDealsSSE({
+    port: portFilter || undefined,
+    status: statusFilter || undefined,
+    customer: customerFilter || undefined,
   });
 
   // 통계 데이터 조회
   const { data: statisticsData, isLoading: statisticsLoading } = useQuery({
     queryKey: ["deals", "statistics"],
     queryFn: () => dealScoreboardAPI.getStatistics(),
-    refetchInterval: 10000, // 10초마다 자동 새로고침
+    refetchInterval: 30000,
   });
 
-  const deals = dealsData?.data || [];
+  const deals = sseDeals;
 
   const handleDealClick = (deal: DealScoreboardType) => {
     setSelectedDeal(deal);
@@ -62,9 +59,11 @@ export default function DashboardPage() {
       fuel_type: deal.fuel_type,
       vessel_name: deal.vessel_name,
       quantity: deal.quantity,
+      fuel_type2: deal.fuel_type2,
+      quantity2: deal.quantity2,
       delivery_date: deal.delivery_date,
-      requested_traders: [],
-      quotes: [],
+      requested_traders: (deal as any).requested_traders || [],
+      quotes: (deal as any).quotes || [],
       status: deal.status === "active" ? "active" : "closed",
       created_at: deal.created_at,
       closed_at: deal.closed_at,
@@ -76,18 +75,51 @@ export default function DashboardPage() {
       <div className="space-y-6">
         {/* 헤더 */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">딜 전광판</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold">딜 전광판</h1>
+
+            {/* 실시간 연결 상태 표시 */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-xs">
+              <span
+                className={`w-2 h-2 rounded-full animate-pulse ${
+                  isConnected ? "bg-green-500" : "bg-red-500"
+                }`}
+              />
+              <span className="text-gray-600">
+                {isConnected ? "실시간 연결됨" : "연결 중..."}
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
+            {/* 내보내기 버튼 - 테이블 뷰에서만 표시 (왼쪽) */}
+            {viewMode === "table" && (
+              <ExportButtons
+                filters={{
+                  status: statusFilter,
+                  port: portFilter,
+                  customer: customerFilter,
+                }}
+              />
+            )}
+
             <div className="text-sm text-gray-500">
               총 {deals.length}건
             </div>
             <div className="flex gap-2">
               <Button
-                variant={viewMode === "pipeline" ? "default" : "outline"}
+                variant={viewMode === "table" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setViewMode("pipeline")}
+                onClick={() => setViewMode("table")}
               >
-                파이프라인
+                테이블
+              </Button>
+              <Button
+                variant={viewMode === "timeline" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("timeline")}
+              >
+                타임라인
               </Button>
               <Button
                 variant={viewMode === "statistics" ? "default" : "outline"}
@@ -101,7 +133,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 필터 */}
-        {viewMode === "pipeline" && (
+        {(viewMode === "table" || viewMode === "timeline") && (
           <div className="bg-white rounded-lg border p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -156,15 +188,20 @@ export default function DashboardPage() {
         )}
 
         {/* 로딩 */}
-        {dealsLoading && viewMode === "pipeline" && (
+        {!isConnected && deals.length === 0 && (viewMode === "table" || viewMode === "timeline") && (
           <div className="flex items-center justify-center py-12">
             <div className="text-gray-500">로딩 중...</div>
           </div>
         )}
 
         {/* 테이블 뷰 */}
-        {viewMode === "pipeline" && !dealsLoading && (
+        {viewMode === "table" && (isConnected || deals.length > 0) && (
           <DealTable deals={deals} onDealClick={handleDealClick} />
+        )}
+
+        {/* 타임라인 뷰 */}
+        {viewMode === "timeline" && (isConnected || deals.length > 0) && (
+          <DealTimeline deals={deals} onDealClick={handleDealClick} />
         )}
 
         {/* 통계 뷰 */}

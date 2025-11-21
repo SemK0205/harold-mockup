@@ -24,7 +24,7 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[60vw] w-[60vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             거래 상세 - {session.vessel_name || "선박명 미정"} / {session.port || "항구 미정"}
@@ -32,21 +32,26 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
         </DialogHeader>
 
         {/* 거래 전광판 스타일 헤더 */}
-        <div className="bg-gray-900 text-green-400 font-mono text-sm p-4 rounded">
-          <div className="grid grid-cols-5 gap-4">
-            <div>
+        <div className="bg-gray-900 text-green-400 font-mono p-4 rounded">
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            <div className="whitespace-nowrap">
               <span className="text-gray-500">선박:</span> {session.vessel_name || "-"}
             </div>
-            <div>
+            <div className="whitespace-nowrap">
               <span className="text-gray-500">ETA:</span> {session.delivery_date || "-"}
             </div>
-            <div>
+            <div className="whitespace-nowrap">
               <span className="text-gray-500">항구:</span> {session.port || "-"}
             </div>
-            <div>
+            <div className="whitespace-nowrap">
               <span className="text-gray-500">연료:</span> {session.fuel_type || "-"} {session.quantity || ""}
+              {session.fuel_type2 && (
+                <span className="text-yellow-400 ml-2">
+                  + {session.fuel_type2} {session.quantity2 || ""}
+                </span>
+              )}
             </div>
-            <div>
+            <div className="whitespace-nowrap">
               <span className="text-gray-500">고객:</span> {session.customer_room_name}
             </div>
           </div>

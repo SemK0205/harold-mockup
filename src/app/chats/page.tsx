@@ -262,16 +262,16 @@ export default function ChatsPage() {
   }) || [];
 
   const getPlatformBadge = (platform: string) => {
-    if (platform === "com.kakao.talk") {
+    if (platform === "kakao" || platform === "kakao_talk" || platform === "com.kakao.talk") {
       return <Badge variant="outline" className="bg-yellow-50">카카오톡</Badge>;
     }
-    if (platform === "com.kakao.yellowid") {
+    if (platform === "kakao_biz" || platform === "com.kakao.yellowid") {
       return <Badge variant="outline" className="bg-orange-50">카카오비즈</Badge>;
     }
-    if (platform === "com.whatsapp") {
+    if (platform === "whatsapp" || platform === "com.whatsapp") {
       return <Badge variant="outline" className="bg-green-50">WhatsApp</Badge>;
     }
-    if (platform === "com.wechat") {
+    if (platform === "wechat" || platform === "com.wechat") {
       return <Badge variant="outline" className="bg-blue-50">WeChat</Badge>;
     }
     return <Badge variant="outline">기타</Badge>;
@@ -439,11 +439,11 @@ export default function ChatsPage() {
                   </div>
                 )}
 
-                {filteredMessages.map((msg: ChatMessage) => {
+                {filteredMessages.map((msg: ChatMessage, index: number) => {
                   const isOurMessage = isOurCompanySender(msg.sender) || msg.direction === "outgoing";
                   return (
                     <div
-                      key={msg.message_id}
+                      key={msg.message_id || `msg-${index}`}
                       className={`flex items-end gap-2 ${
                         isOurMessage
                           ? "justify-end"
