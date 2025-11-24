@@ -54,7 +54,7 @@ export function useSessionMessagesSSE(options: UseSessionMessagesSSEOptions): Us
       const response = await fetch(`${API_BASE_URL}/messages/session/${sessionId}`);
       if (response.ok) {
         const data = await response.json();
-        setMessages(data.messages || []);
+        setMessages(Array.isArray(data) ? data : data.messages || []);
         setIsLoading(false);
       }
     } catch (e) {
