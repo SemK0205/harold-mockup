@@ -35,7 +35,7 @@ export function useSessionMessagesSSE(options: UseSessionMessagesSSEOptions): Us
   // 세션의 채팅방 목록 조회
   const fetchSessionRooms = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`);
+      const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`);
       if (response.ok) {
         const session = await response.json();
         const rooms = [session.customer_room_name, ...(session.requested_traders || [])];
@@ -51,7 +51,7 @@ export function useSessionMessagesSSE(options: UseSessionMessagesSSEOptions): Us
   // 초기 메시지 로드
   const fetchInitialMessages = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/messages`);
+      const response = await fetch(`${API_BASE_URL}/messages/session/${sessionId}`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data.messages || []);
