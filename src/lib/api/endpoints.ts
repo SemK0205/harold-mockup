@@ -8,15 +8,12 @@ import type {
   TradingSession,
   AISuggestion,
   ChatMessage,
-  OutgoingMessage,
   ApproveAISuggestionRequest,
   ApproveAISuggestionResponse,
   RejectAISuggestionRequest,
   RejectAISuggestionResponse,
   SendChatMessageRequest,
   SendChatMessageResponse,
-  CustomAIOptionRequest,
-  CustomAIOptionResponse,
   AnalyticsData,
   PaginatedResponse,
   RoomInfo,
@@ -32,18 +29,6 @@ export const tradingSessionsAPI = {
     const response = await apiClient.get("/sessions/active");
     return response.data;
   },
-
-  // 특정 세션 조회
-  getSessionById: async (sessionId: string): Promise<TradingSession> => {
-    const response = await apiClient.get(`/sessions/${sessionId}`);
-    return response.data;
-  },
-
-  // 세션 종료
-  closeSession: async (sessionId: string): Promise<{ success: boolean; message: string }> => {
-    const response = await apiClient.post(`/sessions/${sessionId}/close`);
-    return response.data;
-  },
 };
 
 // ============================================
@@ -51,12 +36,6 @@ export const tradingSessionsAPI = {
 // ============================================
 
 export const aiSuggestionsAPI = {
-  // 모든 대기중인 AI 제안 조회
-  getPendingSuggestions: async (): Promise<AISuggestion[]> => {
-    const response = await apiClient.get("/ai-suggestions/pending");
-    return response.data;
-  },
-
   // 특정 세션의 AI 제안 조회
   getSuggestionsBySession: async (sessionId: string): Promise<AISuggestion[]> => {
     const response = await apiClient.get(`/ai-suggestions/session/${sessionId}`);
@@ -78,19 +57,7 @@ export const aiSuggestionsAPI = {
     const response = await apiClient.post("/ai-suggestions/reject", data);
     return response.data;
   },
-
-  // 커스텀 옵션 전송
-  sendCustomOption: async (
-    data: CustomAIOptionRequest
-  ): Promise<CustomAIOptionResponse> => {
-    const response = await apiClient.post("/ai-suggestions/custom", data);
-    return response.data;
-  },
 };
-
-// ============================================
-// Chat Messages API
-// ============================================
 
 // ============================================
 // Room Category API
@@ -141,24 +108,6 @@ export const chatMessagesAPI = {
   // 모든 채팅방 목록 조회
   getAllRooms: async (): Promise<RoomInfo[]> => {
     const response = await apiClient.get("/messages/rooms");
-    return response.data;
-  },
-};
-
-// ============================================
-// Outgoing Messages API
-// ============================================
-
-export const outgoingMessagesAPI = {
-  // 대기중인 발신 메시지 조회
-  getPendingMessages: async (): Promise<OutgoingMessage[]> => {
-    const response = await apiClient.get("/outgoing-messages/pending");
-    return response.data;
-  },
-
-  // 발신 메시지 상태 조회
-  getMessageStatus: async (messageId: number): Promise<OutgoingMessage> => {
-    const response = await apiClient.get(`/outgoing-messages/${messageId}`);
     return response.data;
   },
 };
