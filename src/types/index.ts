@@ -255,6 +255,113 @@ export interface ErrorResponse {
 }
 
 // ============================================
+// Deal Stage Types (New Deal Flow)
+// ============================================
+
+/**
+ * 딜 단계 정의
+ * inquiry → deal_started → quote_collecting → customer_feedback/seller_feedback → deal_done/lost/no_offer
+ */
+export type DealStage =
+  | "inquiry"           // 인쿼리 단계 (FullContext 수집 중)
+  | "deal_started"      // 딜 시작 단계 (판매처에 인쿼리 송신)
+  | "quote_collecting"  // 오퍼가격 취합 단계
+  | "renegotiating"     // 조건 재협상 단계
+  | "customer_feedback" // 선주 피드백 대기 단계
+  | "seller_feedback"   // 판매측 피드백 대기 단계
+  | "no_offer"          // 노오퍼 (종료)
+  | "lost"              // 로스트 (종료)
+  | "deal_done";        // 딜던 (종료)
+
+export const DEAL_STAGE_LABELS: Record<DealStage, string> = {
+  inquiry: "Inquiry",
+  deal_started: "Deal Started",
+  quote_collecting: "Collecting Quotes",
+  renegotiating: "Renegotiating",
+  customer_feedback: "Awaiting Customer Feedback",
+  seller_feedback: "Awaiting Seller Feedback",
+  no_offer: "No Offer",
+  lost: "Lost",
+  deal_done: "Deal Done"
+};
+
+export const DEAL_STAGE_COLORS: Record<DealStage, string> = {
+  inquiry: "bg-blue-100 text-blue-800",
+  deal_started: "bg-indigo-100 text-indigo-800",
+  quote_collecting: "bg-purple-100 text-purple-800",
+  renegotiating: "bg-yellow-100 text-yellow-800",
+  customer_feedback: "bg-orange-100 text-orange-800",
+  seller_feedback: "bg-cyan-100 text-cyan-800",
+  no_offer: "bg-gray-100 text-gray-800",
+  lost: "bg-red-100 text-red-800",
+  deal_done: "bg-green-100 text-green-800"
+};
+
+// ============================================
+// Inquiry FullContext Types
+// ============================================
+
+export type InquiryType =
+  | "inquiry_single_fuel_single_port"
+  | "inquiry_single_fuel_multi_port"
+  | "inquiry_dual_fuel_single_port"
+  | "inquiry_dual_fuel_multi_port"
+  | "inquiry_triple_fuel_single_port"
+  | "inquiry_triple_fuel_multi_port";
+
+export interface InquiryFullContext {
+  VesselName?: string;
+  IMO?: string;
+  Port?: string;
+  Port1?: string;
+  Port2?: string;
+  ETA?: string;
+  Fuel?: string;
+  FuelQuantity?: string;
+  Fuel1?: string;
+  Fuel1Quantity?: string;
+  Fuel2?: string;
+  Fuel2Quantity?: string;
+  Fuel3?: string;
+  Fuel3Quantity?: string;
+}
+
+// ============================================
+// Quote FullContext Types
+// ============================================
+
+export type QuoteType =
+  | "quote_single_no_barge"
+  | "quote_single_with_barge"
+  | "quote_dual_no_barge"
+  | "quote_dual_with_barge"
+  | "quote_triple_no_barge"
+  | "quote_triple_with_barge";
+
+export interface QuoteFullContext {
+  FuelPrice?: string;
+  Fuel1Price?: string;
+  Fuel2Price?: string;
+  Fuel3Price?: string;
+  BargeFee?: string;
+}
+
+// ============================================
+// Renegotiation Types
+// ============================================
+
+export type RenegotiationIssue =
+  | "schedule_issue"
+  | "credit_issue"
+  | "stock_issue"
+  | "price_issue";
+
+export type CustomerFeedbackType =
+  | "earliest_request"
+  | "price_negotiation"
+  | "lost";
+
+// ============================================
 // Deal Scoreboard Types
 // ============================================
 
@@ -270,6 +377,7 @@ export interface DealScoreboard {
   quantity2: string | null;
   delivery_date: string | null;
   status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_failed" | "cancelled";
+  stage?: DealStage; // 새로운 딜 단계
   created_at: string;
   closed_at: string | null;
   final_price: number | null;

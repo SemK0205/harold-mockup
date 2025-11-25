@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale/ko";
 import type { TradingSession, ChatMessage, AISuggestion } from "@/types";
 import { DealModalProvider, useDealModal } from "@/contexts/DealModalContext";
 import { useSSEManager } from "@/hooks/useSSEManager";
@@ -48,7 +47,7 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
       <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="max-w-[95vw] w-[95vw] max-h-[90vh] p-0">
           <DialogTitle className="sr-only">
-            거래 상세 - {session.vessel_name || "선박명 미정"}
+            Deal Details - {session.vessel_name || "Vessel TBD"}
           </DialogTitle>
           <DealDetailModalContent onClose={onClose} />
         </DialogContent>
@@ -196,16 +195,16 @@ const DealHeader = memo(({ session, showAIPanel, onToggleAI }: {
     <div className="bg-gray-900 text-green-400 font-mono p-3 border-b">
       <div className="flex flex-wrap items-center gap-4 text-xs">
         <div className="whitespace-nowrap">
-          <span className="text-gray-500">선박:</span> {session.vessel_name || "-"}
+          <span className="text-gray-500">Vessel:</span> {session.vessel_name || "-"}
         </div>
         <div className="whitespace-nowrap">
           <span className="text-gray-500">ETA:</span> {session.delivery_date || "-"}
         </div>
         <div className="whitespace-nowrap">
-          <span className="text-gray-500">항구:</span> {session.port || "-"}
+          <span className="text-gray-500">Port:</span> {session.port || "-"}
         </div>
         <div className="whitespace-nowrap">
-          <span className="text-gray-500">연료:</span> {session.fuel_type || "-"} {session.quantity || ""}
+          <span className="text-gray-500">Fuel:</span> {session.fuel_type || "-"} {session.quantity || ""}
           {session.fuel_type2 && (
             <span className="text-yellow-400 ml-2">
               + {session.fuel_type2} {session.quantity2 || ""}
@@ -213,7 +212,7 @@ const DealHeader = memo(({ session, showAIPanel, onToggleAI }: {
           )}
         </div>
         <div className="whitespace-nowrap">
-          <span className="text-gray-500">고객:</span> {session.customer_room_name}
+          <span className="text-gray-500">Customer:</span> {session.customer_room_name}
         </div>
         {!showAIPanel && (
           <Button
@@ -223,7 +222,7 @@ const DealHeader = memo(({ session, showAIPanel, onToggleAI }: {
             className="ml-auto text-green-400 hover:text-green-300 hover:bg-gray-800"
           >
             <Sparkles className="w-4 h-4 mr-1" />
-            AI 어시스턴트
+            AI Assistant
           </Button>
         )}
       </div>
@@ -347,7 +346,7 @@ const BuyerChatColumn = memo(() => {
       <div className="p-3 border-b bg-white">
         <h3 className="font-semibold flex items-center gap-2">
           <MessageSquare className="w-4 h-4" />
-          구매자 채팅
+          Buyer Chat
           <Badge variant="secondary" className="ml-auto">
             {session?.customer_room_name}
           </Badge>
@@ -369,7 +368,7 @@ const BuyerChatColumn = memo(() => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="메시지 입력..."
+            placeholder="Type a message..."
             className="flex-1"
           />
           <Button onClick={handleSend} size="icon">
@@ -401,6 +400,61 @@ const AIAssistantColumn = memo(() => {
   const [editingMessage, setEditingMessage] = useState<string>('');
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  // 트레이더 선택 상태 관리 (suggestionId-optionIndex -> Set of selected target indices)
+  const [selectedTargets, setSelectedTargets] = useState<Map<string, Set<number>>>(new Map());
+
+  // 선택된 타겟 키 생성 헬퍼
+  const getTargetKey = (suggestionId: number, optionIndex: number) => `${suggestionId}-${optionIndex}`;
+
+  // 타겟 선택 초기화 (모든 타겟 선택)
+  const initializeTargets = (suggestionId: number, optionIndex: number, targets: any[]) => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    if (!selectedTargets.has(key)) {
+      const allSelected = new Set(targets.map((_, idx) => idx));
+      setSelectedTargets(prev => new Map(prev).set(key, allSelected));
+    }
+  };
+
+  // 타겟 선택 토글
+  const toggleTarget = (suggestionId: number, optionIndex: number, targetIndex: number) => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    setSelectedTargets(prev => {
+      const newMap = new Map(prev);
+      const currentSet = new Set(prev.get(key) || []);
+      if (currentSet.has(targetIndex)) {
+        currentSet.delete(targetIndex);
+      } else {
+        currentSet.add(targetIndex);
+      }
+      newMap.set(key, currentSet);
+      return newMap;
+    });
+  };
+
+  // 전체 선택
+  const selectAllTargets = (suggestionId: number, optionIndex: number, totalTargets: number) => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    const allSelected = new Set(Array.from({ length: totalTargets }, (_, i) => i));
+    setSelectedTargets(prev => new Map(prev).set(key, allSelected));
+  };
+
+  // 전체 해제
+  const deselectAllTargets = (suggestionId: number, optionIndex: number) => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    setSelectedTargets(prev => new Map(prev).set(key, new Set()));
+  };
+
+  // 선택된 타겟 수 가져오기
+  const getSelectedCount = (suggestionId: number, optionIndex: number) => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    return selectedTargets.get(key)?.size || 0;
+  };
+
+  // 타겟이 선택되었는지 확인
+  const isTargetSelected = (suggestionId: number, optionIndex: number, targetIndex: number) => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    return selectedTargets.get(key)?.has(targetIndex) || false;
+  };
 
   // 첫 번째 제안을 자동으로 확장
   useEffect(() => {
@@ -408,6 +462,10 @@ const AIAssistantColumn = memo(() => {
       const firstSuggestion = aiSuggestions[0];
       setExpandedSuggestion(firstSuggestion.id);
       setEditingMessage(firstSuggestion.suggestions[0]?.message || '');
+      // 첫 번째 옵션의 타겟 초기화
+      if (firstSuggestion.suggestions[0]?.targets) {
+        initializeTargets(firstSuggestion.id, 0, firstSuggestion.suggestions[0].targets);
+      }
     }
   }, [aiSuggestions, expandedSuggestion]);
 
@@ -420,22 +478,22 @@ const AIAssistantColumn = memo(() => {
   });
   const completion = Math.round(((requirements.length - missingFields.length) / requirements.length) * 100);
 
-  // 필드별 질문 메시지
+  // Field questions
   const fieldQuestions: Record<string, string> = {
-    vessel_name: '선박명을 알려주세요.',
-    port: '항구를 알려주세요.',
-    delivery_date: 'ETA (예상 도착일)를 알려주세요.',
-    fuel_type: '연료 종류를 알려주세요.',
-    quantity: '수량을 알려주세요.'
+    vessel_name: 'Please provide the vessel name.',
+    port: 'Please provide the port.',
+    delivery_date: 'Please provide the ETA (Estimated Time of Arrival).',
+    fuel_type: 'Please provide the fuel type.',
+    quantity: 'Please provide the quantity.'
   };
 
-  // 필드 한글명
+  // Field labels
   const fieldLabels: Record<string, string> = {
-    vessel_name: '선박명',
-    port: '항구',
+    vessel_name: 'Vessel',
+    port: 'Port',
     delivery_date: 'ETA',
-    fuel_type: '연료종류',
-    quantity: '수량'
+    fuel_type: 'Fuel Type',
+    quantity: 'Quantity'
   };
 
   useEffect(() => {
@@ -532,6 +590,10 @@ const AIAssistantColumn = memo(() => {
 
       const messageToSend = customMessage || option.message;
 
+      // 선택된 타겟 인덱스 가져오기
+      const key = getTargetKey(suggestion.id, optionIndex);
+      const selectedTargetIndices = selectedTargets.get(key) || new Set(option.targets?.map((_: any, i: number) => i) || []);
+
       // 1. 백엔드에 승인 요청
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/approve?suggestion_id=${suggestion.id}`, {
         method: 'POST',
@@ -544,8 +606,11 @@ const AIAssistantColumn = memo(() => {
 
       // 2. 실제 메시지 전송 (action 타입에 따라)
       if (option.action === 'send_to_suppliers' && Array.isArray(option.targets)) {
-        // 여러 트레이더에게 전송
-        for (const target of option.targets) {
+        // 선택된 트레이더에게만 전송
+        for (let i = 0; i < option.targets.length; i++) {
+          if (!selectedTargetIndices.has(i)) continue; // 선택되지 않은 타겟은 스킵
+
+          const target = option.targets[i];
           const targetRoom = typeof target === 'string' ? target : target.room;
           const targetMessage = typeof target === 'string' ? messageToSend : target.message;
           const platform = getRoomPlatform(targetRoom);
@@ -598,8 +663,11 @@ const AIAssistantColumn = memo(() => {
           })
         });
       } else if (option.action === 'send_multiple' && Array.isArray(option.targets)) {
-        // 여러 대상에게 각각 다른 메시지 전송
-        for (const target of option.targets) {
+        // 선택된 대상에게만 각각 다른 메시지 전송
+        for (let i = 0; i < option.targets.length; i++) {
+          if (!selectedTargetIndices.has(i)) continue; // 선택되지 않은 타겟은 스킵
+
+          const target = option.targets[i];
           if (typeof target === 'object' && 'room' in target) {
             const platform = getRoomPlatform(target.room);
             const platformToInternal: Record<string, string> = {
@@ -626,6 +694,12 @@ const AIAssistantColumn = memo(() => {
       setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
       setExpandedSuggestion(null);
       setEditingMessage('');
+      // 선택 상태도 클리어
+      setSelectedTargets(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(key);
+        return newMap;
+      });
 
     } catch (error) {
       console.error('Failed to approve suggestion:', error);
@@ -660,12 +734,13 @@ const AIAssistantColumn = memo(() => {
       <div className="p-3 border-b bg-gray-50 flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-2">
           <Sparkles className="w-4 h-4" />
-          AI 어시스턴트
+          AI Assistant
         </h3>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => setShowAIPanel(false)}
+          className="h-8 w-8 p-0 bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-300 border-gray-300"
         >
           <X className="w-4 h-4" />
         </Button>
@@ -702,7 +777,7 @@ const AIAssistantColumn = memo(() => {
                           isMissing && "text-red-600 hover:bg-red-50"
                         )}
                         onClick={() => isMissing && handleMissingFieldClick(field)}
-                        title={isMissing ? `클릭하여 "${fieldQuestions[field]}" 질문 전송` : ''}
+                        title={isMissing ? `Click to ask: "${fieldQuestions[field]}"` : ''}
                       >
                         {isMissing ? (
                           <Circle className="w-3 h-3" />
@@ -711,7 +786,7 @@ const AIAssistantColumn = memo(() => {
                         )}
                         <span className="font-medium">{fieldLabels[field]}:</span>
                         <span className={isMissing ? 'italic' : ''}>
-                          {isMissing ? '클릭하여 질문' : String(value)}
+                          {isMissing ? 'Click to ask' : String(value)}
                         </span>
                       </div>
                     );
@@ -723,7 +798,7 @@ const AIAssistantColumn = memo(() => {
 
           {/* AI Suggestions */}
           <div className="space-y-3">
-            <h4 className="text-sm font-medium">AI 제안</h4>
+            <h4 className="text-sm font-medium">AI Suggestions</h4>
             {aiSuggestions.length > 0 ? (
               aiSuggestions.map((suggestion) => (
                 <div key={suggestion.id} className="border rounded-lg overflow-hidden">
@@ -772,6 +847,10 @@ const AIAssistantColumn = memo(() => {
                             onClick={() => {
                               setSelectedOptionIndex(idx);
                               setEditingMessage(option.message || '');
+                              // 타겟 초기화
+                              if (option.targets) {
+                                initializeTargets(suggestion.id, idx, option.targets);
+                              }
                             }}
                           >
                             <div className="flex items-center gap-2">
@@ -785,20 +864,85 @@ const AIAssistantColumn = memo(() => {
                             <div className="mt-1 text-gray-600 line-clamp-2">{option.reason}</div>
                             {option.targets && option.targets.length > 0 && (
                               <div className="mt-1 text-gray-500 truncate">
-                                대상: {Array.isArray(option.targets)
+                                Target: {Array.isArray(option.targets)
                                   ? option.targets.slice(0, 3).map(t => typeof t === 'string' ? t : t.room).join(', ')
                                   : ''}
-                                {option.targets.length > 3 && ` 외 ${option.targets.length - 3}개`}
+                                {option.targets.length > 3 && ` +${option.targets.length - 3} more`}
                               </div>
                             )}
                           </div>
                         ))}
                       </div>
 
-                      {/* 메시지 수정 */}
+                      {/* 트레이더 선택 UI - Select All/None 및 체크박스 목록 */}
+                      {suggestion.suggestions[selectedOptionIndex]?.targets &&
+                        suggestion.suggestions[selectedOptionIndex].targets.length > 0 && (
+                        <div className="border rounded-lg bg-white">
+                          {/* 헤더: Select Recipients + All/None 버튼 */}
+                          <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
+                            <span className="text-xs font-medium text-gray-700">Select Recipients</span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => selectAllTargets(
+                                  suggestion.id,
+                                  selectedOptionIndex,
+                                  suggestion.suggestions[selectedOptionIndex].targets.length
+                                )}
+                                className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              >
+                                All
+                              </button>
+                              <button
+                                onClick={() => deselectAllTargets(suggestion.id, selectedOptionIndex)}
+                                className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                              >
+                                None
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 트레이더 목록 */}
+                          <div className="max-h-32 overflow-y-auto p-2 space-y-1">
+                            {suggestion.suggestions[selectedOptionIndex].targets.map((target: any, tIdx: number) => {
+                              const targetRoom = typeof target === 'string' ? target : target.room;
+                              const isSelected = isTargetSelected(suggestion.id, selectedOptionIndex, tIdx);
+                              return (
+                                <div
+                                  key={tIdx}
+                                  className={cn(
+                                    "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
+                                    isSelected ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-transparent hover:bg-gray-100"
+                                  )}
+                                  onClick={() => toggleTarget(suggestion.id, selectedOptionIndex, tIdx)}
+                                >
+                                  <div className={cn(
+                                    "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
+                                    isSelected ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
+                                  )}>
+                                    {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                  </div>
+                                  <span className={cn(
+                                    "truncate flex-1",
+                                    isSelected ? "text-blue-900 font-medium" : "text-gray-700"
+                                  )}>
+                                    {targetRoom}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* 선택 카운터 */}
+                          <div className="px-3 py-2 border-t bg-gray-50 text-xs text-gray-600">
+                            {getSelectedCount(suggestion.id, selectedOptionIndex)} of {suggestion.suggestions[selectedOptionIndex].targets.length} selected
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Edit Message */}
                       {suggestion.suggestions[selectedOptionIndex]?.message && (
                         <div>
-                          <label className="text-xs font-medium text-gray-700">메시지 수정</label>
+                          <label className="text-xs font-medium text-gray-700">Edit Message</label>
                           <textarea
                             value={editingMessage}
                             onChange={(e) => setEditingMessage(e.target.value)}
@@ -808,7 +952,7 @@ const AIAssistantColumn = memo(() => {
                         </div>
                       )}
 
-                      {/* 액션 버튼 */}
+                      {/* Action Buttons */}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -822,15 +966,15 @@ const AIAssistantColumn = memo(() => {
                           )}
                           disabled={isProcessing}
                         >
-                          {isProcessing ? '처리중...' : '승인 및 전송'}
+                          {isProcessing ? 'Processing...' : 'Approve & Send'}
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => handleRejectSuggestion(suggestion, '사용자 거부')}
+                          onClick={() => handleRejectSuggestion(suggestion, 'User rejected')}
                           disabled={isProcessing}
                         >
-                          거부
+                          Reject
                         </Button>
                       </div>
                     </div>
@@ -839,28 +983,28 @@ const AIAssistantColumn = memo(() => {
               ))
             ) : (
               <div className="text-center py-8 text-gray-500 text-sm">
-                AI가 대화를 분석중입니다...
+                AI is analyzing the conversation...
               </div>
             )}
           </div>
         </div>
       </ScrollArea>
 
-      {/* 선택된 제안 일괄 적용 */}
+      {/* Batch Apply Selected Suggestions */}
       {selectedSuggestions.size > 0 && (
         <div className="p-3 border-t bg-gray-50">
           <Button
             className="w-full"
             size="sm"
             onClick={() => {
-              // 선택된 제안들 일괄 승인
+              // Batch approve selected suggestions
               aiSuggestions
                 .filter(s => selectedSuggestions.has(s.id))
                 .forEach(s => handleApproveSuggestion(s, 0));
             }}
             disabled={isProcessing}
           >
-            선택한 제안 일괄 적용 ({selectedSuggestions.size})
+            Apply Selected ({selectedSuggestions.size})
           </Button>
         </div>
       )}
@@ -1001,10 +1145,10 @@ const SellerChatsColumn = memo(() => {
       <div className="p-3 border-b bg-white">
         <h3 className="font-semibold flex items-center gap-2">
           <MessageSquare className="w-4 h-4" />
-          판매자 채팅
+          Seller Chats
           {sellerTabs.length > 0 && (
             <Badge variant="secondary" className="ml-auto">
-              {sellerTabs.length}명
+              {sellerTabs.length}
             </Badge>
           )}
         </h3>
@@ -1012,7 +1156,7 @@ const SellerChatsColumn = memo(() => {
 
       {sellerTabs.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-500">
-          연결된 판매자가 없습니다
+          No connected sellers
         </div>
       ) : (
         <Tabs
@@ -1020,26 +1164,36 @@ const SellerChatsColumn = memo(() => {
           onValueChange={setActiveSellerTab}
           className="flex flex-col flex-1 min-h-0 overflow-hidden"
         >
-          <TabsList className="w-full justify-start rounded-none border-b px-2 flex-shrink-0">
-            {sellerTabs.map(trader => (
-              <TabsTrigger
-                key={trader}
-                value={trader}
-                className="relative group"
-              >
-                {trader}
-                <span
-                  className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeSellerTab(trader);
-                  }}
-                >
-                  <X className="w-3 h-3" />
-                </span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="relative flex-shrink-0 border-b">
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+              <TabsList className="inline-flex w-max min-w-full justify-start rounded-none px-2 bg-transparent h-auto py-1">
+                {sellerTabs.map((trader, index) => (
+                  <TabsTrigger
+                    key={trader}
+                    value={trader}
+                    className="relative group flex-shrink-0 px-3 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md"
+                  >
+                    <span className="truncate max-w-[120px]" title={trader}>
+                      {trader.length > 15 ? `${trader.slice(0, 15)}...` : trader}
+                    </span>
+                    <span
+                      className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-red-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSellerTab(trader);
+                      }}
+                    >
+                      <X className="w-3 h-3" />
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+            {/* Scroll indicator when tabs overflow */}
+            {sellerTabs.length > 3 && (
+              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+            )}
+          </div>
 
           {sellerTabs.map(trader => (
             <TabsContent
@@ -1088,8 +1242,7 @@ const MessageBubble = memo(({ message }: { message: ChatMessage }) => {
           isOutgoing ? "text-blue-100" : "text-gray-500"
         )}>
           {formatDistanceToNow(new Date(message.timestamp), {
-            addSuffix: true,
-            locale: ko
+            addSuffix: true
           })}
         </div>
       </div>
@@ -1153,7 +1306,7 @@ const SuggestionCard = memo(({
               variant={suggestion.confidence > 0.8 ? 'default' : 'secondary'}
               className="mt-2"
             >
-              신뢰도: {Math.round(suggestion.confidence * 100)}%
+              Confidence: {Math.round(suggestion.confidence * 100)}%
             </Badge>
           )}
         </div>
@@ -1208,7 +1361,7 @@ const SellerChatRoom = memo(({
             value={inputValue}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && onSend()}
-            placeholder={`${trader}에게 메시지...`}
+            placeholder={`Message to ${trader}...`}
             className="flex-1"
           />
           <Button onClick={onSend} size="icon">

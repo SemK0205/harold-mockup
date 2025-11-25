@@ -27,9 +27,9 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
   const [selectedTargets, setSelectedTargets] = useState<Record<string, string[]>>({});  // suggestionId_optionNum -> targets
 
-  if (isLoading) return <div>로딩 중...</div>;
+  if (isLoading) return <div>Loading...</div>;
   if (!suggestions || suggestions.length === 0) {
-    return <div className="text-gray-500">AI 제안이 없습니다.</div>;
+    return <div className="text-gray-500">No AI suggestions available.</div>;
   }
 
   const getFullContextStatus = (suggestion: AISuggestion): FullContextStatus => {
@@ -46,7 +46,7 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
   const handleApprove = async (suggestionId: number) => {
     const options = selectedOptions[suggestionId] || [];
     if (options.length === 0) {
-      alert("최소 1개 옵션을 선택해주세요");
+      alert("Please select at least one option");
       return;
     }
 
@@ -65,9 +65,9 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
         selected_options: options,
         selected_targets: Object.keys(targetsMap).length > 0 ? targetsMap : undefined,
       });
-      alert("승인되었습니다");
+      alert("Approved successfully");
     } catch (error) {
-      alert("승인 실패: " + String(error));
+      alert("Approval failed: " + String(error));
     }
   };
 
@@ -79,9 +79,9 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
         suggestion_id: suggestionId,
         rejection_reason: reason,
       });
-      alert("거부되었습니다");
+      alert("Rejected successfully");
     } catch (error) {
-      alert("거부 실패: " + String(error));
+      alert("Rejection failed: " + String(error));
     }
   };
 
@@ -127,9 +127,9 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
 
         return (
           <div key={suggestion.id} className="border rounded-lg p-4 space-y-3">
-            {/* FullContext 시각화 */}
+            {/* FullContext Visualization */}
             <div className="bg-gray-50 rounded p-3">
-              <h4 className="text-xs font-medium mb-2">FullContext 상태</h4>
+              <h4 className="text-xs font-medium mb-2">FullContext Status</h4>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(fullContextStatus).map(([key, status]) => (
                   <div
@@ -146,18 +146,18 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
               </div>
             </div>
 
-            {/* 카테고리 및 확신도 */}
+            {/* Category and Confidence */}
             <div className="flex items-center space-x-3">
               <Badge className="text-xs">{suggestion.category}</Badge>
               <span className="text-xs text-gray-500">
-                확신도: {(suggestion.confidence * 100).toFixed(0)}%
+                Confidence: {(suggestion.confidence * 100).toFixed(0)}%
               </span>
               <Badge variant={suggestion.status === "pending" ? "outline" : "secondary"} className="text-xs">
                 {suggestion.status}
               </Badge>
             </div>
 
-            {/* 원본 메시지 */}
+            {/* Original Message */}
             {suggestion.original_message && (
               <div className="bg-blue-50 border-l-4 border-blue-400 p-3">
                 <p className="text-sm text-gray-700">{suggestion.original_message.message}</p>
@@ -167,9 +167,9 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
               </div>
             )}
 
-            {/* AI 제안 옵션들 */}
+            {/* AI Suggestion Options */}
             <div className="space-y-2">
-              <h4 className="text-sm font-medium">AI 제안 옵션</h4>
+              <h4 className="text-sm font-medium">AI Suggestion Options</h4>
               {suggestion.suggestions.map((option) => {
                 const targets = Array.isArray(option.targets)
                   ? option.targets.map((t: any) => typeof t === 'string' ? t : t.room || t)
@@ -194,15 +194,15 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
                       />
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <span className="text-sm font-medium">옵션 {option.option}</span>
+                          <span className="text-sm font-medium">Option {option.option}</span>
                           <Badge variant="outline" className="text-xs">{option.action}</Badge>
                         </div>
                         <p className="text-sm text-gray-700 mb-1 whitespace-pre-wrap">{option.message}</p>
 
-                        {/* 트레이더 개별 선택 (send_to_suppliers인 경우) */}
+                        {/* Select Traders (for send_to_suppliers action) */}
                         {option.action === "send_to_suppliers" && targets.length > 0 && (
                           <div className="mt-2 p-2 bg-white rounded border">
-                            <p className="text-xs font-medium text-gray-600 mb-1">보낼 대상 선택:</p>
+                            <p className="text-xs font-medium text-gray-600 mb-1">Select Recipients:</p>
                             <div className="flex flex-wrap gap-1">
                               {targets.map((target: string) => (
                                 <label
@@ -227,19 +227,19 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
                               ))}
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              선택됨: {currentTargets.length}/{targets.length}
+                              Selected: {currentTargets.length}/{targets.length}
                             </p>
                           </div>
                         )}
 
-                        {/* 다른 액션의 경우 기존 대상 표시 */}
+                        {/* Show target for other actions */}
                         {option.action !== "send_to_suppliers" && targets.length > 0 && (
                           <p className="text-xs text-gray-500">
-                            대상: {targets.join(", ")}
+                            Target: {targets.join(", ")}
                           </p>
                         )}
 
-                        <p className="text-xs text-gray-600 mt-1">이유: {option.reason}</p>
+                        <p className="text-xs text-gray-600 mt-1">Reason: {option.reason}</p>
                       </div>
                     </div>
                   </div>
@@ -247,11 +247,11 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
               })}
             </div>
 
-            {/* 커스텀 옵션 */}
+            {/* Custom Option */}
             <div className="border-t pt-3">
-              <h4 className="text-sm font-medium mb-1">커스텀 메시지 (직접 입력)</h4>
+              <h4 className="text-sm font-medium mb-1">Custom Message</h4>
               <Input
-                placeholder="직접 메시지를 작성하세요..."
+                placeholder="Write your own message..."
                 value={customMessages[suggestion.id] || ""}
                 onChange={(e) =>
                   setCustomMessages((prev) => ({ ...prev, [suggestion.id]: e.target.value }))
@@ -260,11 +260,11 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
               />
             </div>
 
-            {/* 거부 이유 */}
+            {/* Rejection Reason */}
             <div>
-              <h4 className="text-sm font-medium mb-1">거부 이유 (선택사항)</h4>
+              <h4 className="text-sm font-medium mb-1">Rejection Reason (Optional)</h4>
               <Textarea
-                placeholder="거부 이유를 입력하세요 (디버깅용)..."
+                placeholder="Enter rejection reason (for debugging)..."
                 value={rejectionReasons[suggestion.id] || ""}
                 onChange={(e) =>
                   setRejectionReasons((prev) => ({ ...prev, [suggestion.id]: e.target.value }))
@@ -274,7 +274,7 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
               />
             </div>
 
-            {/* 승인/거부 버튼 */}
+            {/* Approve/Reject Buttons */}
             {suggestion.status === "pending" && (
               <div className="flex space-x-2">
                 <Button
@@ -283,7 +283,7 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
                   className="bg-green-600 hover:bg-green-700 text-sm"
                   size="sm"
                 >
-                  승인
+                  Approve
                 </Button>
                 <Button
                   onClick={() => handleReject(suggestion.id)}
@@ -292,7 +292,7 @@ export function AISuggestionsTab({ sessionId }: AISuggestionsTabProps) {
                   size="sm"
                   className="text-sm"
                 >
-                  거부
+                  Reject
                 </Button>
               </div>
             )}

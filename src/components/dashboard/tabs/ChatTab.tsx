@@ -1,6 +1,6 @@
 /**
  * Chat Tab
- * 고객/트레이더 채팅 인터페이스
+ * Customer/Trader Chat Interface
  */
 
 "use client";
@@ -130,26 +130,26 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
         platform: getRoomPlatform(selectedRoom),
       });
       setMessageText("");
-      alert("메시지 전송 완료");
+      alert("Message sent successfully");
     } catch (error) {
-      alert("메시지 전송 실패: " + String(error));
+      alert("Failed to send message: " + String(error));
     }
   };
 
-  if (isLoading) return <div>로딩 중...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <div className="space-y-4">
-      {/* 채팅방 선택 */}
+      {/* Room Selection */}
       <div className="flex items-center space-x-2">
-        <span className="text-sm font-medium">채팅방 선택:</span>
+        <span className="text-sm font-medium">Select Room:</span>
         <div className="flex flex-wrap gap-2">
           <Badge
             variant={selectedRoom === customerRoom ? "default" : "outline"}
             className="cursor-pointer"
             onClick={() => setSelectedRoom(customerRoom)}
           >
-            고객: {customerRoom}
+            Customer: {customerRoom}
           </Badge>
           {traderRooms.map((room) => (
             <Badge
@@ -158,13 +158,13 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
               className="cursor-pointer"
               onClick={() => setSelectedRoom(room)}
             >
-              트레이더: {room}
+              Trader: {room}
             </Badge>
           ))}
         </div>
       </div>
 
-      {/* 채팅 메시지 목록 */}
+      {/* Chat Messages */}
       <div
         ref={chatContainerRef}
         onScroll={handleScroll}
@@ -172,7 +172,7 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
       >
         {currentMessages.length === 0 ? (
           <div className="text-center text-gray-500 py-12">
-            메시지가 없습니다
+            No messages
           </div>
         ) : (
           currentMessages.map((msg) => {
@@ -205,7 +205,7 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
                       {msg.sender}
                     </span>
                     <span className="text-xs opacity-60">
-                      {new Date(msg.timestamp).toLocaleString("ko-KR", {
+                      {new Date(msg.timestamp).toLocaleString("en-US", {
                         month: "2-digit",
                         day: "2-digit",
                         hour: "2-digit",
@@ -221,10 +221,10 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
         )}
       </div>
 
-      {/* 메시지 전송 */}
+      {/* Send Message */}
       <div className="space-y-2">
         <Textarea
-          placeholder="메시지를 입력하세요..."
+          placeholder="Type your message..."
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
           rows={3}
@@ -237,13 +237,13 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
         />
         <div className="flex justify-between items-center">
           <span className="text-xs text-gray-500">
-            Shift+Enter로 줄바꿈, Enter로 전송
+            Shift+Enter for new line, Enter to send
           </span>
           <Button
             onClick={handleSendMessage}
             disabled={sendMessageMutation.isPending || !messageText.trim()}
           >
-            전송
+            Send
           </Button>
         </div>
       </div>

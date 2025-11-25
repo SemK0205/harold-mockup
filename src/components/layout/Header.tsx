@@ -12,9 +12,9 @@ export function Header() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: "딜 전광판", href: "/dashboard" },
-    { name: "챗 매니저", href: "/chats" },
-    { name: "통계", href: "/analytics" },
+    { name: "Deal Dashboard", href: "/dashboard" },
+    { name: "Chat Manager", href: "/chats" },
+    { name: "Analytics", href: "/analytics" },
   ];
 
   return (

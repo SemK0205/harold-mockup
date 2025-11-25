@@ -1,6 +1,6 @@
 /**
- * DealTimeline 컴포넌트
- * 딜 진행 상황을 타임라인 형식으로 표시
+ * DealTimeline Component
+ * Display deal progress in timeline format
  */
 
 "use client";
@@ -39,25 +39,25 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<"today" | "week" | "month" | "all">("week");
 
-  // 타임라인 이벤트 생성
+  // Generate timeline events
   const timelineEvents = useMemo(() => {
     const events: TimelineEvent[] = [];
 
     deals.forEach((deal) => {
-      // 딜 생성 이벤트
+      // Deal created event
       events.push({
         id: `${deal.id}-created`,
         dealId: deal.id,
         type: "created",
         timestamp: deal.created_at,
         deal,
-        title: `새 딜 생성: ${deal.vessel_name || "미정"}`,
-        description: `${deal.customer_room_name} - ${deal.port || "미정"} - ${deal.fuel_type || ""} ${deal.quantity || ""}`,
+        title: `New Deal: ${deal.vessel_name || "TBD"}`,
+        description: `${deal.customer_room_name} - ${deal.port || "TBD"} - ${deal.fuel_type || ""} ${deal.quantity || ""}`,
         icon: <FileText className="w-4 h-4" />,
         color: "bg-blue-500",
       });
 
-      // 견적 수신 이벤트
+      // Quote received event
       if (deal.total_quotes_received > 0 && deal.last_quote_time) {
         events.push({
           id: `${deal.id}-quoted`,
@@ -65,14 +65,14 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
           type: "quoted",
           timestamp: deal.last_quote_time,
           deal,
-          title: `견적 수신: ${deal.total_quotes_received}개`,
-          description: `${deal.vessel_name || "미정"} - ${deal.customer_room_name}`,
+          title: `Quote Received: ${deal.total_quotes_received}`,
+          description: `${deal.vessel_name || "TBD"} - ${deal.customer_room_name}`,
           icon: <MessageSquare className="w-4 h-4" />,
           color: "bg-purple-500",
         });
       }
 
-      // 딜 종료 이벤트
+      // Deal closed event
       if (deal.closed_at) {
         const isSuccess = deal.status === "closed_success";
         events.push({
@@ -82,13 +82,13 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
           timestamp: deal.closed_at,
           deal,
           title: isSuccess
-            ? `딜 성사: $${deal.final_price?.toLocaleString() || "0"}`
+            ? `Deal Completed: $${deal.final_price?.toLocaleString() || "0"}`
             : deal.status === "cancelled"
-            ? "딜 취소"
-            : "딜 실패",
+            ? "Deal Cancelled"
+            : "Deal Failed",
           description: isSuccess
-            ? `${deal.selected_trader} - ${deal.vessel_name || "미정"}`
-            : deal.closing_reason || "사유 없음",
+            ? `${deal.selected_trader} - ${deal.vessel_name || "TBD"}`
+            : deal.closing_reason || "No reason provided",
           icon: isSuccess ? (
             <CheckCircle className="w-4 h-4" />
           ) : deal.status === "cancelled" ? (
@@ -105,22 +105,22 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
       }
     });
 
-    // 시간순 정렬 (최신순)
+    // Sort by time (newest first)
     events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     return events;
   }, [deals]);
 
-  // 필터링된 이벤트
+  // Filtered events
   const filteredEvents = useMemo(() => {
     let filtered = timelineEvents;
 
-    // 상태 필터
+    // Status filter
     if (selectedStatus !== "all") {
       filtered = filtered.filter((event) => event.deal.status === selectedStatus);
     }
 
-    // 시간 범위 필터
+    // Time range filter
     const now = new Date();
     const getStartDate = () => {
       switch (timeRange) {
@@ -149,7 +149,7 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
     return filtered;
   }, [timelineEvents, selectedStatus, timeRange]);
 
-  // 시간 포맷팅
+  // Time formatting
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -158,12 +158,12 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return "방금 전";
-    if (diffMins < 60) return `${diffMins}분 전`;
-    if (diffHours < 24) return `${diffHours}시간 전`;
-    if (diffDays < 7) return `${diffDays}일 전`;
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
 
-    return date.toLocaleDateString("ko-KR", {
+    return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -171,12 +171,12 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
     });
   };
 
-  // 날짜별 그룹핑
+  // Group by date
   const groupedEvents = useMemo(() => {
     const groups: { [key: string]: TimelineEvent[] } = {};
 
     filteredEvents.forEach((event) => {
-      const date = new Date(event.timestamp).toLocaleDateString("ko-KR", {
+      const date = new Date(event.timestamp).toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -193,10 +193,10 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
 
   return (
     <div className="space-y-4">
-      {/* 필터 컨트롤 */}
+      {/* Filter Controls */}
       <div className="bg-white rounded-lg border p-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          {/* 시간 범위 선택 */}
+          {/* Time Range Selection */}
           <div className="flex gap-2">
             {(["today", "week", "month", "all"] as const).map((range) => (
               <button
@@ -209,17 +209,17 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                 }`}
               >
                 {range === "today"
-                  ? "오늘"
+                  ? "Today"
                   : range === "week"
-                  ? "1주일"
+                  ? "1 Week"
                   : range === "month"
-                  ? "1개월"
-                  : "전체"}
+                  ? "1 Month"
+                  : "All"}
               </button>
             ))}
           </div>
 
-          {/* 상태 필터 */}
+          {/* Status Filter */}
           <div className="flex gap-2">
             <button
               onClick={() => setSelectedStatus("all")}
@@ -229,7 +229,7 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              전체
+              All
             </button>
             <button
               onClick={() => setSelectedStatus("active")}
@@ -239,7 +239,7 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              진행중
+              In Progress
             </button>
             <button
               onClick={() => setSelectedStatus("closed_success")}
@@ -249,7 +249,7 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              성사
+              Completed
             </button>
             <button
               onClick={() => setSelectedStatus("closed_failed")}
@@ -259,28 +259,28 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              실패
+              Failed
             </button>
           </div>
         </div>
 
-        {/* 통계 요약 */}
+        {/* Statistics Summary */}
         <div className="mt-4 grid grid-cols-4 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold text-gray-900">{filteredEvents.length}</div>
-            <div className="text-xs text-gray-500">총 이벤트</div>
+            <div className="text-xs text-gray-500">Total Events</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-blue-600">
               {filteredEvents.filter((e) => e.type === "created").length}
             </div>
-            <div className="text-xs text-gray-500">새 딜</div>
+            <div className="text-xs text-gray-500">New Deals</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-purple-600">
               {filteredEvents.filter((e) => e.type === "quoted").length}
             </div>
-            <div className="text-xs text-gray-500">견적</div>
+            <div className="text-xs text-gray-500">Quotes</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-green-600">
@@ -290,26 +290,26 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                 ).length
               }
             </div>
-            <div className="text-xs text-gray-500">성사</div>
+            <div className="text-xs text-gray-500">Completed</div>
           </div>
         </div>
       </div>
 
-      {/* 타임라인 */}
+      {/* Timeline */}
       <div className="bg-white rounded-lg border">
         {Object.keys(groupedEvents).length === 0 ? (
           <div className="p-12 text-center text-gray-400">
-            선택한 조건에 해당하는 이벤트가 없습니다
+            No events match the selected criteria
           </div>
         ) : (
           Object.entries(groupedEvents).map(([date, events]) => (
             <div key={date} className="border-b last:border-b-0">
-              {/* 날짜 헤더 */}
+              {/* Date Header */}
               <div className="px-4 py-2 bg-gray-50 border-b">
                 <h3 className="text-sm font-semibold text-gray-700">{date}</h3>
               </div>
 
-              {/* 이벤트 목록 */}
+              {/* Event List */}
               <div className="divide-y">
                 {events.map((event) => (
                   <div
@@ -318,21 +318,21 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                     className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      {/* 아이콘 */}
+                      {/* Icon */}
                       <div
                         className={`w-8 h-8 rounded-full ${event.color} text-white flex items-center justify-center flex-shrink-0 mt-0.5`}
                       >
                         {event.icon}
                       </div>
 
-                      {/* 내용 */}
+                      {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1">
                             <h4 className="text-sm font-medium text-gray-900">{event.title}</h4>
                             <p className="text-xs text-gray-600 mt-0.5">{event.description}</p>
 
-                            {/* 추가 정보 */}
+                            {/* Additional Info */}
                             <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
                               {event.deal.port && (
                                 <span className="flex items-center gap-1">
@@ -343,20 +343,20 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
                               {event.deal.total_quotes_received > 0 && (
                                 <span className="flex items-center gap-1">
                                   <MessageSquare className="w-3 h-3" />
-                                  견적 {event.deal.total_quotes_received}개
+                                  {event.deal.total_quotes_received} quotes
                                 </span>
                               )}
                               {event.deal.duration_minutes > 0 && (
                                 <span className="flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
-                                  {Math.floor(event.deal.duration_minutes / 60)}시간{" "}
-                                  {Math.floor(event.deal.duration_minutes % 60)}분
+                                  {Math.floor(event.deal.duration_minutes / 60)}h{" "}
+                                  {Math.floor(event.deal.duration_minutes % 60)}m
                                 </span>
                               )}
                             </div>
                           </div>
 
-                          {/* 시간 */}
+                          {/* Time */}
                           <span className="text-xs text-gray-400 flex-shrink-0">
                             {formatTime(event.timestamp)}
                           </span>

@@ -69,12 +69,12 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
   // 상태 배지
   const getStatusBadge = (status: DealScoreboard["status"]) => {
     const badges = {
-      active: <Badge className="bg-blue-500 text-white">진행중</Badge>,
-      quoted: <Badge className="bg-purple-500 text-white">견적수신</Badge>,
-      negotiating: <Badge className="bg-yellow-500 text-black">협상중</Badge>,
-      closed_success: <Badge className="bg-green-500 text-white">성사</Badge>,
-      closed_failed: <Badge className="bg-red-500 text-white">실패</Badge>,
-      cancelled: <Badge className="bg-gray-500 text-white">취소</Badge>,
+      active: <Badge className="bg-blue-500 text-white">In Progress</Badge>,
+      quoted: <Badge className="bg-purple-500 text-white">Quote Received</Badge>,
+      negotiating: <Badge className="bg-yellow-500 text-black">Negotiating</Badge>,
+      closed_success: <Badge className="bg-green-500 text-white">Completed</Badge>,
+      closed_failed: <Badge className="bg-red-500 text-white">Failed</Badge>,
+      cancelled: <Badge className="bg-gray-500 text-white">Cancelled</Badge>,
     };
     return badges[status];
   };
@@ -96,7 +96,7 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                   onClick={() => handleSort("vessel_name")}
                   className="flex items-center gap-1 hover:text-blue-600"
                 >
-                  선박명 <SortIcon field="vessel_name" />
+                  Vessel <SortIcon field="vessel_name" />
                 </button>
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
@@ -104,7 +104,7 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                   onClick={() => handleSort("port")}
                   className="flex items-center gap-1 hover:text-blue-600"
                 >
-                  항구 <SortIcon field="port" />
+                  Port <SortIcon field="port" />
                 </button>
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
@@ -115,15 +115,15 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                   ETA <SortIcon field="delivery_date" />
                 </button>
               </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">연료</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">고객사</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">견적 현황</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700">Fuel</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700">Customer</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700">Quotes</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
                 <button
                   onClick={() => handleSort("status")}
                   className="flex items-center gap-1 hover:text-blue-600"
                 >
-                  상태 <SortIcon field="status" />
+                  Status <SortIcon field="status" />
                 </button>
               </th>
               <th className="px-4 py-3 text-left font-semibold text-gray-700">
@@ -131,7 +131,7 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                   onClick={() => handleSort("created_at")}
                   className="flex items-center gap-1 hover:text-blue-600"
                 >
-                  생성일시 <SortIcon field="created_at" />
+                  Created <SortIcon field="created_at" />
                 </button>
               </th>
             </tr>
@@ -140,7 +140,7 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
             {sortedDeals.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
-                  딜 데이터가 없습니다
+                  No deals found
                 </td>
               </tr>
             )}
@@ -198,7 +198,7 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                     {deal.total_quotes_received > 0 ? (
                       <>
                         <div className="text-xs text-gray-600">
-                          {deal.total_quotes_received}개 수신
+                          {deal.total_quotes_received} received
                         </div>
                         {deal.selected_trader && (
                           <div className="text-xs font-medium text-green-700">
@@ -212,7 +212,7 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                         )}
                       </>
                     ) : (
-                      <div className="text-xs text-gray-400">대기중</div>
+                      <div className="text-xs text-gray-400">Waiting</div>
                     )}
                   </div>
                 </td>
@@ -247,26 +247,26 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
       {/* 하단 요약 */}
       <div className="bg-gray-50 px-4 py-3 border-t flex items-center justify-between text-sm text-gray-600">
         <div>
-          총 <span className="font-bold text-gray-900">{deals.length}</span>건
+          Total: <span className="font-bold text-gray-900">{deals.length}</span>
         </div>
         <div className="flex gap-4">
           <span>
-            진행중: <span className="font-medium text-blue-600">
+            In Progress: <span className="font-medium text-blue-600">
               {deals.filter(d => d.status === "active").length}
             </span>
           </span>
           <span>
-            견적수신: <span className="font-medium text-purple-600">
+            Quoted: <span className="font-medium text-purple-600">
               {deals.filter(d => d.status === "quoted").length}
             </span>
           </span>
           <span>
-            협상중: <span className="font-medium text-yellow-600">
+            Negotiating: <span className="font-medium text-yellow-600">
               {deals.filter(d => d.status === "negotiating").length}
             </span>
           </span>
           <span>
-            성사: <span className="font-medium text-green-600">
+            Completed: <span className="font-medium text-green-600">
               {deals.filter(d => d.status === "closed_success").length}
             </span>
           </span>

@@ -1,288 +1,573 @@
 /**
- * FullContext Configuration
- * 단계별 필수/선택 필드와 질문 템플릿 정의
+ * FullContext Configuration V2
+ * New 9-stage deal flow system
  *
- * 이 설정은 설정 관리 UI에서 수정 가능하며,
- * 수정사항은 localStorage에 저장됩니다.
+ * Deal Flow: inquiry → deal_started → quote_collecting → renegotiating →
+ *            customer_feedback → seller_feedback → deal_done/lost/no_offer
  */
 
-export type SessionPhase = 'pre_deal' | 'deal_inquiry' | 'deal_negotiation' | 'deal_confirmation' | 'post_deal'
+import {
+  DealStage,
+  DEAL_STAGE_LABELS,
+  DEAL_STAGE_COLORS,
+  InquiryType,
+  QuoteType,
+  RenegotiationIssue,
+  CustomerFeedbackType
+} from '@/types'
+
+// Re-export types from index.ts
+export {
+  DealStage,
+  DEAL_STAGE_LABELS,
+  DEAL_STAGE_COLORS,
+  InquiryType,
+  QuoteType,
+  RenegotiationIssue,
+  CustomerFeedbackType
+}
+
+// ============================================
+// Field Definitions
+// ============================================
 
 export interface FieldDefinition {
   name: string
   label: string
+  labelKo: string
   description?: string
+  descriptionKo?: string
   type: 'text' | 'number' | 'date' | 'select'
-  options?: string[] // select 타입일 때
+  options?: string[]
 }
 
-export interface PhaseDefinition {
-  name: SessionPhase
+export const FIELD_DEFINITIONS: Record<string, FieldDefinition> = {
+  // Inquiry Fields
+  vessel_name: {
+    name: 'vessel_name',
+    label: 'Vessel Name',
+    labelKo: 'Vessel Name',
+    description: 'Name of the vessel',
+    type: 'text'
+  },
+  imo: {
+    name: 'imo',
+    label: 'IMO',
+    labelKo: 'IMO',
+    description: 'IMO number (7 digits)',
+    type: 'text'
+  },
+  port: {
+    name: 'port',
+    label: 'Port',
+    labelKo: 'Port',
+    description: 'Bunkering port',
+    type: 'text'
+  },
+  port1: {
+    name: 'port1',
+    label: 'Port 1',
+    labelKo: 'Port 1',
+    description: 'First port option',
+    type: 'text'
+  },
+  port2: {
+    name: 'port2',
+    label: 'Port 2',
+    labelKo: 'Port 2',
+    description: 'Second port option',
+    type: 'text'
+  },
+  eta: {
+    name: 'eta',
+    label: 'ETA',
+    labelKo: 'ETA',
+    description: 'Estimated time of arrival',
+    type: 'date'
+  },
+  fuel_type: {
+    name: 'fuel_type',
+    label: 'Fuel Type',
+    labelKo: 'Fuel Type',
+    description: 'Primary fuel type',
+    type: 'select',
+    options: ['VLSFO', 'LSFO', 'MGO', 'LSMGO', 'HSFO', 'ULSFO']
+  },
+  quantity: {
+    name: 'quantity',
+    label: 'Quantity',
+    labelKo: 'Quantity',
+    description: 'Quantity in MT',
+    type: 'number'
+  },
+  fuel_type2: {
+    name: 'fuel_type2',
+    label: 'Fuel Type 2',
+    labelKo: 'Fuel Type 2',
+    description: 'Secondary fuel type',
+    type: 'select',
+    options: ['VLSFO', 'LSFO', 'MGO', 'LSMGO', 'HSFO', 'ULSFO']
+  },
+  quantity2: {
+    name: 'quantity2',
+    label: 'Quantity 2',
+    labelKo: 'Quantity 2',
+    description: 'Secondary fuel quantity in MT',
+    type: 'number'
+  },
+  fuel_type3: {
+    name: 'fuel_type3',
+    label: 'Fuel Type 3',
+    labelKo: 'Fuel Type 3',
+    description: 'Third fuel type',
+    type: 'select',
+    options: ['VLSFO', 'LSFO', 'MGO', 'LSMGO', 'HSFO', 'ULSFO']
+  },
+  quantity3: {
+    name: 'quantity3',
+    label: 'Quantity 3',
+    labelKo: 'Quantity 3',
+    description: 'Third fuel quantity in MT',
+    type: 'number'
+  },
+  // Quote Fields
+  fuel_price: {
+    name: 'fuel_price',
+    label: 'Fuel Price',
+    labelKo: 'Fuel Price',
+    description: 'Price per MT (USD)',
+    type: 'number'
+  },
+  fuel1_price: {
+    name: 'fuel1_price',
+    label: 'Fuel 1 Price',
+    labelKo: 'Fuel 1 Price',
+    description: 'First fuel price per MT',
+    type: 'number'
+  },
+  fuel2_price: {
+    name: 'fuel2_price',
+    label: 'Fuel 2 Price',
+    labelKo: 'Fuel 2 Price',
+    description: 'Second fuel price per MT',
+    type: 'number'
+  },
+  fuel3_price: {
+    name: 'fuel3_price',
+    label: 'Fuel 3 Price',
+    labelKo: 'Fuel 3 Price',
+    description: 'Third fuel price per MT',
+    type: 'number'
+  },
+  barge_fee: {
+    name: 'barge_fee',
+    label: 'Barge Fee',
+    labelKo: 'Barge Fee',
+    description: 'Barge delivery fee',
+    type: 'number'
+  },
+  earliest: {
+    name: 'earliest',
+    label: 'Earliest',
+    labelKo: 'Earliest',
+    description: 'Earliest available date',
+    type: 'text'
+  }
+}
+
+// ============================================
+// Inquiry FullContext Definitions
+// ============================================
+
+export interface InquiryFullContextDef {
+  required: string[]
+  optional: string[]
+  format: string
+  example?: string
+}
+
+export const INQUIRY_FULLCONTEXT: Record<InquiryType, InquiryFullContextDef> = {
+  inquiry_single_fuel_single_port: {
+    required: ['vessel_name', 'port', 'eta', 'fuel_type', 'quantity'],
+    optional: ['imo'],
+    format: '<VesselName> / <IMO> / <Port> / <ETA> / <Fuel> / <FuelQuantity>',
+    example: 'Ram Commander / 9648312 / Singapore / 10th Dec / LSFO 180cst 0.5% / 650MT'
+  },
+  inquiry_single_fuel_multi_port: {
+    required: ['vessel_name', 'port1', 'port2', 'eta', 'fuel_type', 'quantity'],
+    optional: ['imo'],
+    format: '<VesselName> / <IMO> / <Port1> or <Port2> / <ETA> / <Fuel> / <FuelQuantity>'
+  },
+  inquiry_dual_fuel_single_port: {
+    required: ['vessel_name', 'port', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2'],
+    optional: ['imo'],
+    format: '<VesselName> / <IMO> / <Port> / <ETA> / <Fuel1> / <Fuel1Quantity> / <Fuel2> / <Fuel2Quantity>'
+  },
+  inquiry_dual_fuel_multi_port: {
+    required: ['vessel_name', 'port1', 'port2', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2'],
+    optional: ['imo']
+  },
+  inquiry_triple_fuel_single_port: {
+    required: ['vessel_name', 'port', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2', 'fuel_type3', 'quantity3'],
+    optional: ['imo']
+  },
+  inquiry_triple_fuel_multi_port: {
+    required: ['vessel_name', 'port1', 'port2', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2', 'fuel_type3', 'quantity3'],
+    optional: ['imo']
+  }
+}
+
+// ============================================
+// Quote FullContext Definitions
+// ============================================
+
+export interface QuoteFullContextDef {
+  required: string[]
+  optional: string[]
+  format: string
+}
+
+export const QUOTE_FULLCONTEXT: Record<QuoteType, QuoteFullContextDef> = {
+  quote_single_no_barge: {
+    required: ['fuel_price'],
+    optional: [],
+    format: '<FuelPrice>'
+  },
+  quote_single_with_barge: {
+    required: ['fuel_price', 'barge_fee'],
+    optional: [],
+    format: '<FuelPrice>+<BargeFee>'
+  },
+  quote_dual_no_barge: {
+    required: ['fuel1_price', 'fuel2_price'],
+    optional: [],
+    format: '<Fuel1Price> / <Fuel2Price>'
+  },
+  quote_dual_with_barge: {
+    required: ['fuel1_price', 'fuel2_price', 'barge_fee'],
+    optional: [],
+    format: '<Fuel1Price> / <Fuel2Price>+<BargeFee>'
+  },
+  quote_triple_no_barge: {
+    required: ['fuel1_price', 'fuel2_price', 'fuel3_price'],
+    optional: [],
+    format: '<Fuel1Price> / <Fuel2Price> / <Fuel3Price>'
+  },
+  quote_triple_with_barge: {
+    required: ['fuel1_price', 'fuel2_price', 'fuel3_price', 'barge_fee'],
+    optional: [],
+    format: '<Fuel1Price> / <Fuel2Price> / <Fuel3Price>+<BargeFee>'
+  }
+}
+
+// ============================================
+// Question Templates (Bilingual)
+// ============================================
+
+export interface QuestionTemplate {
+  field: string
+  ko: string
+  en: string
+  priority: number
+}
+
+export const QUESTION_TEMPLATES: Record<string, QuestionTemplate> = {
+  vessel_name: {
+    field: 'vessel_name',
+    ko: 'Vessel Name?',
+    en: 'What is the vessel name?',
+    priority: 1
+  },
+  port: {
+    field: 'port',
+    ko: 'Port?',
+    en: 'Which port?',
+    priority: 2
+  },
+  port1: {
+    field: 'port1',
+    ko: 'First port?',
+    en: 'What is the first port?',
+    priority: 2
+  },
+  port2: {
+    field: 'port2',
+    ko: 'Second port?',
+    en: 'What is the second port?',
+    priority: 3
+  },
+  eta: {
+    field: 'eta',
+    ko: 'ETA?',
+    en: 'What is the ETA?',
+    priority: 4
+  },
+  fuel_type: {
+    field: 'fuel_type',
+    ko: 'Grade?',
+    en: 'What is the fuel type?',
+    priority: 5
+  },
+  quantity: {
+    field: 'quantity',
+    ko: 'Qty?',
+    en: 'What is the quantity?',
+    priority: 6
+  },
+  fuel_type2: {
+    field: 'fuel_type2',
+    ko: 'Second grade?',
+    en: 'What is the second fuel type?',
+    priority: 7
+  },
+  quantity2: {
+    field: 'quantity2',
+    ko: 'Second qty?',
+    en: 'What is the quantity for the second fuel?',
+    priority: 8
+  },
+  fuel_type3: {
+    field: 'fuel_type3',
+    ko: 'Third grade?',
+    en: 'What is the third fuel type?',
+    priority: 9
+  },
+  quantity3: {
+    field: 'quantity3',
+    ko: 'Third qty?',
+    en: 'What is the quantity for the third fuel?',
+    priority: 10
+  },
+  earliest: {
+    field: 'earliest',
+    ko: 'Earliest?',
+    en: 'What is the earliest date?',
+    priority: 11
+  }
+}
+
+// ============================================
+// Stage-specific Required Fields
+// ============================================
+
+export interface StageRequirements {
+  stage: DealStage
   label: string
+  labelKo: string
   description: string
+  descriptionKo: string
   required: string[]
   optional: string[]
 }
 
-export interface QuestionTemplate {
-  field: string
-  buyerQuestion: string
-  sellerQuestion: string
-  priority: number
+export const STAGE_REQUIREMENTS: Record<DealStage, StageRequirements> = {
+  inquiry: {
+    stage: 'inquiry',
+    label: 'Inquiry',
+    labelKo: 'Inquiry',
+    description: 'Collecting inquiry information',
+    descriptionKo: 'Inquiry FullContext',
+    required: ['vessel_name', 'port', 'eta', 'fuel_type', 'quantity'],
+    optional: ['imo', 'fuel_type2', 'quantity2']
+  },
+  deal_started: {
+    stage: 'deal_started',
+    label: 'Deal Started',
+    labelKo: 'Deal Started',
+    description: 'Inquiry sent to suppliers',
+    descriptionKo: 'Inquiry sent to suppliers',
+    required: ['vessel_name', 'port', 'eta', 'fuel_type', 'quantity'],
+    optional: []
+  },
+  quote_collecting: {
+    stage: 'quote_collecting',
+    label: 'Collecting Quotes',
+    labelKo: 'Collecting Quotes',
+    description: 'Collecting quotes from suppliers',
+    descriptionKo: 'Collecting offers',
+    required: ['fuel_price'],
+    optional: ['barge_fee', 'fuel1_price', 'fuel2_price']
+  },
+  renegotiating: {
+    stage: 'renegotiating',
+    label: 'Renegotiating',
+    labelKo: 'Renegotiating',
+    description: 'Renegotiating terms',
+    descriptionKo: 'Renegotiation',
+    required: [],
+    optional: ['earliest', 'fuel_price']
+  },
+  customer_feedback: {
+    stage: 'customer_feedback',
+    label: 'Customer Feedback',
+    labelKo: 'Customer Feedback',
+    description: 'Awaiting customer response',
+    descriptionKo: 'Customer feedback',
+    required: [],
+    optional: []
+  },
+  seller_feedback: {
+    stage: 'seller_feedback',
+    label: 'Seller Feedback',
+    labelKo: 'Seller Feedback',
+    description: 'Awaiting seller response',
+    descriptionKo: 'Seller feedback',
+    required: [],
+    optional: ['earliest']
+  },
+  no_offer: {
+    stage: 'no_offer',
+    label: 'No Offer',
+    labelKo: 'No Offer',
+    description: 'Deal closed - no offer available',
+    descriptionKo: 'No Offer',
+    required: [],
+    optional: []
+  },
+  lost: {
+    stage: 'lost',
+    label: 'Lost',
+    labelKo: 'Lost',
+    description: 'Deal lost',
+    descriptionKo: 'Lost',
+    required: [],
+    optional: []
+  },
+  deal_done: {
+    stage: 'deal_done',
+    label: 'Deal Done',
+    labelKo: 'Deal Done',
+    description: 'Deal completed successfully',
+    descriptionKo: 'Deal Done',
+    required: [],
+    optional: []
+  }
 }
+
+// ============================================
+// Renegotiation Patterns
+// ============================================
+
+export const RENEGOTIATION_PATTERNS: Record<RenegotiationIssue, string[]> = {
+  schedule_issue: [
+    'early', 'earliest', 'schedule', 'ETA',
+    'too early', 'too late', 'date'
+  ],
+  credit_issue: [
+    'credit', 'payment', 'prepay'
+  ],
+  stock_issue: [
+    'out of stock', 'no stock', 'not available', 'no offer'
+  ],
+  price_issue: [
+    'price', 'expensive', 'cheaper', 'better price', 'discount'
+  ]
+}
+
+// ============================================
+// Customer Feedback Patterns
+// ============================================
+
+export const CUSTOMER_FEEDBACK_PATTERNS: Record<CustomerFeedbackType, string[]> = {
+  earliest_request: ['earliest', 'early', 'when'],
+  price_negotiation: ['price', 'expensive', 'cheaper', 'discount', 'better'],
+  lost: ['lost', 'cancel', 'pass', 'no', 'not']
+}
+
+// ============================================
+// Message Templates
+// ============================================
+
+export const INQUIRY_MESSAGE_TEMPLATES = {
+  ko: '{fullcontext}\nPls quote',
+  en: '{fullcontext}\nPlease quote for the above.'
+}
+
+export const QUOTE_TO_CUSTOMER_TEMPLATES = {
+  single_no_barge: '<VesselName> -> <FuelPrice>',
+  single_with_barge: '<VesselName> -> <FuelPrice>+<BargeFee>',
+  dual_no_barge: '<VesselName> -> <Fuel1Price> / <Fuel2Price>',
+  dual_with_barge: '<VesselName> -> <Fuel1Price> / <Fuel2Price>+<BargeFee>',
+  triple_no_barge: '<VesselName> -> <Fuel1Price> / <Fuel2Price> / <Fuel3Price>',
+  triple_with_barge: '<VesselName> -> <Fuel1Price> / <Fuel2Price> / <Fuel3Price>+<BargeFee>'
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Get question for a missing field
+ */
+export function getFieldQuestion(field: string, language: 'ko' | 'en' = 'en'): string {
+  const template = QUESTION_TEMPLATES[field]
+  if (!template) {
+    return language === 'en' ? `What is the ${field}?` : `${field}?`
+  }
+  return template[language]
+}
+
+/**
+ * Get stage requirements
+ */
+export function getStageRequirements(stage: DealStage): StageRequirements {
+  return STAGE_REQUIREMENTS[stage]
+}
+
+/**
+ * Check if stage is a terminal stage
+ */
+export function isTerminalStage(stage: DealStage): boolean {
+  return ['no_offer', 'lost', 'deal_done'].includes(stage)
+}
+
+/**
+ * Get next possible stages from current stage
+ */
+export function getNextPossibleStages(currentStage: DealStage): DealStage[] {
+  const transitions: Record<DealStage, DealStage[]> = {
+    inquiry: ['deal_started'],
+    deal_started: ['quote_collecting', 'no_offer'],
+    quote_collecting: ['customer_feedback', 'renegotiating', 'no_offer'],
+    renegotiating: ['quote_collecting', 'customer_feedback', 'no_offer'],
+    customer_feedback: ['seller_feedback', 'deal_done', 'lost'],
+    seller_feedback: ['customer_feedback', 'deal_done', 'lost'],
+    no_offer: [],
+    lost: [],
+    deal_done: []
+  }
+  return transitions[currentStage] || []
+}
+
+// ============================================
+// LocalStorage Config (for UI customization)
+// ============================================
 
 export interface FullContextConfig {
   version: string
   lastModified: string
-
-  // 필드 정의
-  fields: Record<string, FieldDefinition>
-
-  // 단계별 정의
-  phases: Record<SessionPhase, PhaseDefinition>
-
-  // 질문 템플릿
-  questions: Record<string, QuestionTemplate>
+  customQuestions?: Record<string, { ko: string; en: string }>
 }
 
-// 기본 설정 - 나중에 수정 가능
-export const DEFAULT_FULLCONTEXT_CONFIG: FullContextConfig = {
-  version: '1.0.0',
-  lastModified: new Date().toISOString(),
+const STORAGE_KEY = 'harold_fullcontext_config_v2'
 
-  fields: {
-    vessel_name: {
-      name: 'vessel_name',
-      label: '선박명',
-      description: '거래 대상 선박의 이름',
-      type: 'text'
-    },
-    port: {
-      name: 'port',
-      label: '항구',
-      description: '연료 공급 항구',
-      type: 'text'
-    },
-    delivery_date: {
-      name: 'delivery_date',
-      label: '배송일',
-      description: '연료 배송 희망일',
-      type: 'date'
-    },
-    fuel_type: {
-      name: 'fuel_type',
-      label: '연료 종류',
-      description: '필요한 연료 타입',
-      type: 'select',
-      options: ['VLSFO', 'MGO', 'HSFO', 'LSMGO', 'ULSFO']
-    },
-    quantity: {
-      name: 'quantity',
-      label: '수량',
-      description: '필요 수량 (MT)',
-      type: 'number'
-    },
-    eta: {
-      name: 'eta',
-      label: 'ETA',
-      description: '선박 도착 예정 시간',
-      type: 'date'
-    },
-    agent: {
-      name: 'agent',
-      label: '에이전트',
-      description: '거래 에이전트 정보',
-      type: 'text'
-    },
-    price_range: {
-      name: 'price_range',
-      label: '희망 가격대',
-      description: '톤당 희망 가격 범위',
-      type: 'text'
-    },
-    payment_terms: {
-      name: 'payment_terms',
-      label: '결제 조건',
-      description: '결제 조건 및 기한',
-      type: 'text'
-    },
-    vis_guarantee: {
-      name: 'vis_guarantee',
-      label: 'VIS 개런티',
-      description: 'VIS 품질 보증 여부',
-      type: 'select',
-      options: ['필요', '불필요', '협의 필요']
-    },
-    early_date: {
-      name: 'early_date',
-      label: '얼리 날짜',
-      description: '가장 빠른 공급 가능일',
-      type: 'date'
-    },
-    invoice_number: {
-      name: 'invoice_number',
-      label: '인보이스 번호',
-      description: '거래 인보이스 번호',
-      type: 'text'
-    },
-    delivery_confirmation: {
-      name: 'delivery_confirmation',
-      label: '배송 확인',
-      description: '배송 완료 확인 여부',
-      type: 'select',
-      options: ['완료', '진행중', '미완료']
-    }
-  },
-
-  phases: {
-    pre_deal: {
-      name: 'pre_deal',
-      label: '딜 전',
-      description: '거래 전 문의/탐색 단계',
-      required: [],
-      optional: ['vessel_name', 'port']
-    },
-    deal_inquiry: {
-      name: 'deal_inquiry',
-      label: '인쿼리',
-      description: '인쿼리 수신 및 기본 정보 수집',
-      required: ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity'],
-      optional: ['eta', 'agent']
-    },
-    deal_negotiation: {
-      name: 'deal_negotiation',
-      label: '협상',
-      description: '가격 협상 및 조건 조율',
-      required: ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity', 'price_range'],
-      optional: ['payment_terms', 'vis_guarantee', 'early_date']
-    },
-    deal_confirmation: {
-      name: 'deal_confirmation',
-      label: '확정',
-      description: '거래 최종 확정 단계',
-      required: ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity', 'price_range', 'payment_terms'],
-      optional: ['vis_guarantee', 'early_date']
-    },
-    post_deal: {
-      name: 'post_deal',
-      label: '딜 후',
-      description: '거래 후 정산 및 확인',
-      required: ['invoice_number', 'delivery_confirmation'],
-      optional: []
-    }
-  },
-
-  questions: {
-    vessel_name: {
-      field: 'vessel_name',
-      buyerQuestion: '선박명을 알려주세요',
-      sellerQuestion: '어떤 배의 견적인가요?',
-      priority: 1
-    },
-    port: {
-      field: 'port',
-      buyerQuestion: '어느 항구에서 필요하신가요?',
-      sellerQuestion: '어느 항구 견적을 원하시나요?',
-      priority: 2
-    },
-    delivery_date: {
-      field: 'delivery_date',
-      buyerQuestion: '언제까지 배송받기 원하시나요?',
-      sellerQuestion: '배송 희망일이 언제인가요?',
-      priority: 3
-    },
-    fuel_type: {
-      field: 'fuel_type',
-      buyerQuestion: '어떤 종류의 연료가 필요하신가요? (예: VLSFO, MGO)',
-      sellerQuestion: '어떤 연료 종류의 견적을 원하시나요?',
-      priority: 4
-    },
-    quantity: {
-      field: 'quantity',
-      buyerQuestion: '필요한 수량을 알려주세요 (MT 단위)',
-      sellerQuestion: '필요한 수량이 얼마나 되나요?',
-      priority: 5
-    },
-    eta: {
-      field: 'eta',
-      buyerQuestion: '선박 도착 예정 시간(ETA)을 알려주세요',
-      sellerQuestion: '선박 ETA가 언제인가요?',
-      priority: 6
-    },
-    agent: {
-      field: 'agent',
-      buyerQuestion: '에이전트 정보가 있으신가요?',
-      sellerQuestion: '에이전트는 누구인가요?',
-      priority: 7
-    },
-    price_range: {
-      field: 'price_range',
-      buyerQuestion: '희망하시는 가격대가 있으신가요?',
-      sellerQuestion: '톤당 가격을 알려주세요',
-      priority: 8
-    },
-    payment_terms: {
-      field: 'payment_terms',
-      buyerQuestion: '결제 조건을 알려주세요',
-      sellerQuestion: '결제 조건이 어떻게 되나요?',
-      priority: 9
-    },
-    vis_guarantee: {
-      field: 'vis_guarantee',
-      buyerQuestion: 'VIS 개런티가 필요하신가요?',
-      sellerQuestion: 'VIS 개런티 제공이 가능한가요?',
-      priority: 10
-    },
-    early_date: {
-      field: 'early_date',
-      buyerQuestion: '가장 빠른 공급 가능일이 언제인가요?',
-      sellerQuestion: '얼리(Early) 날짜가 언제인가요?',
-      priority: 11
-    },
-    invoice_number: {
-      field: 'invoice_number',
-      buyerQuestion: '인보이스 번호를 알려주세요',
-      sellerQuestion: '인보이스 번호가 무엇인가요?',
-      priority: 12
-    },
-    delivery_confirmation: {
-      field: 'delivery_confirmation',
-      buyerQuestion: '배송이 완료되었나요?',
-      sellerQuestion: '배송 상태를 확인해주세요',
-      priority: 13
-    }
-  }
-}
-
-// localStorage 키
-const STORAGE_KEY = 'harold_fullcontext_config'
-
-/**
- * 현재 설정을 가져옵니다.
- * localStorage에 저장된 설정이 있으면 사용, 없으면 기본값 사용
- */
 export function getFullContextConfig(): FullContextConfig {
   if (typeof window === 'undefined') {
-    return DEFAULT_FULLCONTEXT_CONFIG
+    return { version: '2.0.0', lastModified: new Date().toISOString() }
   }
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
-      const parsed = JSON.parse(stored) as FullContextConfig
-      // 버전 체크 등 마이그레이션 로직 추가 가능
-      return parsed
+      return JSON.parse(stored) as FullContextConfig
     }
   } catch (error) {
     console.error('Failed to load FullContext config:', error)
   }
 
-  return DEFAULT_FULLCONTEXT_CONFIG
+  return { version: '2.0.0', lastModified: new Date().toISOString() }
 }
 
-/**
- * 설정을 저장합니다.
- */
 export function saveFullContextConfig(config: FullContextConfig): void {
   if (typeof window === 'undefined') return
 
@@ -297,50 +582,7 @@ export function saveFullContextConfig(config: FullContextConfig): void {
   }
 }
 
-/**
- * 설정을 기본값으로 초기화합니다.
- */
 export function resetFullContextConfig(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(STORAGE_KEY)
-}
-
-/**
- * 특정 단계의 필드 목록을 가져옵니다.
- */
-export function getPhaseFields(phase: SessionPhase): {
-  required: FieldDefinition[]
-  optional: FieldDefinition[]
-} {
-  const config = getFullContextConfig()
-  const phaseConfig = config.phases[phase]
-
-  return {
-    required: phaseConfig.required
-      .map(name => config.fields[name])
-      .filter(Boolean),
-    optional: phaseConfig.optional
-      .map(name => config.fields[name])
-      .filter(Boolean)
-  }
-}
-
-/**
- * 필드의 질문을 가져옵니다.
- */
-export function getFieldQuestion(
-  field: string,
-  direction: 'buyer' | 'seller'
-): string {
-  const config = getFullContextConfig()
-  const question = config.questions[field]
-
-  if (!question) {
-    const fieldDef = config.fields[field]
-    return direction === 'buyer'
-      ? `${fieldDef?.label || field}을(를) 알려주세요`
-      : `${fieldDef?.label || field}이(가) 어떻게 되나요?`
-  }
-
-  return direction === 'buyer' ? question.buyerQuestion : question.sellerQuestion
 }

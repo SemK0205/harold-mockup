@@ -1,6 +1,6 @@
 /**
  * Quotes Tab
- * 견적 비교 뷰
+ * Quote Comparison View
  */
 
 "use client";
@@ -16,7 +16,7 @@ export function QuotesTab({ quotes }: QuotesTabProps) {
   if (quotes.length === 0) {
     return (
       <div className="text-center text-gray-500 py-12">
-        받은 견적이 없습니다
+        No quotes received
       </div>
     );
   }
@@ -33,20 +33,20 @@ export function QuotesTab({ quotes }: QuotesTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* 견적 요약 */}
+      {/* Quote Summary */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-blue-50 rounded-lg p-4">
-          <div className="text-sm text-gray-600">총 견적 수</div>
-          <div className="text-2xl font-bold text-blue-600">{quotes.length}개</div>
+          <div className="text-sm text-gray-600">Total Quotes</div>
+          <div className="text-2xl font-bold text-blue-600">{quotes.length}</div>
         </div>
         <div className="bg-green-50 rounded-lg p-4">
-          <div className="text-sm text-gray-600">최저가</div>
+          <div className="text-sm text-gray-600">Lowest Price</div>
           <div className="text-2xl font-bold text-green-600">
             {lowestPrice !== null ? `$${lowestPrice}` : "-"}
           </div>
         </div>
         <div className="bg-orange-50 rounded-lg p-4">
-          <div className="text-sm text-gray-600">가격 차이</div>
+          <div className="text-sm text-gray-600">Price Range</div>
           <div className="text-2xl font-bold text-orange-600">
             {prices.length >= 2
               ? `$${(Math.max(...prices) - Math.min(...prices)).toFixed(2)}`
@@ -55,25 +55,25 @@ export function QuotesTab({ quotes }: QuotesTabProps) {
         </div>
       </div>
 
-      {/* 견적 비교 테이블 */}
+      {/* Quote Comparison Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                트레이더
+                Trader
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                가격
+                Price
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                상태
+                Status
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                받은 시간
+                Received
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                비고
+                Notes
               </th>
             </tr>
           </thead>
@@ -97,16 +97,16 @@ export function QuotesTab({ quotes }: QuotesTabProps) {
                       </span>
                       {isLowest && (
                         <Badge variant="default" className="bg-green-600">
-                          최저가
+                          Lowest
                         </Badge>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <Badge variant="outline">{quote.status || "확인 필요"}</Badge>
+                    <Badge variant="outline">{quote.status || "Pending Review"}</Badge>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {new Date(quote.received_at).toLocaleString("ko-KR", {
+                    {new Date(quote.received_at).toLocaleString("en-US", {
                       month: "2-digit",
                       day: "2-digit",
                       hour: "2-digit",
@@ -123,9 +123,9 @@ export function QuotesTab({ quotes }: QuotesTabProps) {
         </table>
       </div>
 
-      {/* 견적 상세 정보 */}
+      {/* Quote Details */}
       <div className="space-y-4">
-        <h3 className="font-medium text-lg">견적 상세</h3>
+        <h3 className="font-medium text-lg">Quote Details</h3>
         {quotes.map((quote, index) => (
           <div key={index} className="border rounded-lg p-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -138,7 +138,7 @@ export function QuotesTab({ quotes }: QuotesTabProps) {
               </div>
             )}
             <div className="text-xs text-gray-500">
-              받은 시간: {new Date(quote.received_at).toLocaleString("ko-KR")}
+              Received: {new Date(quote.received_at).toLocaleString("en-US")}
             </div>
           </div>
         ))}
