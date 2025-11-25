@@ -10,7 +10,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { DealTable } from "@/components/dashboard/DealTable";
 import { DealStatistics } from "@/components/dashboard/DealStatistics";
 import { DealTimeline } from "@/components/dashboard/DealTimeline";
-import { DealDetailModal } from "@/components/dashboard/DealDetailModal";
+import { DealDetailModal } from "@/components/dashboard/DealDetailModal3Column";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { useQuery } from "@tanstack/react-query";
 import { dealScoreboardAPI } from "@/lib/api/endpoints";
