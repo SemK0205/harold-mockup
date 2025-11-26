@@ -17,7 +17,8 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /opt/harold/harold-web
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             npm ci
             npm run build
             pm2 restart harold-web || pm2 start npm --name "harold-web" -- start
