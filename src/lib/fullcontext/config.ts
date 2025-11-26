@@ -6,26 +6,71 @@
  *            customer_feedback → seller_feedback → deal_done/lost/no_offer
  */
 
-import {
-  DealStage,
-  DEAL_STAGE_LABELS,
-  DEAL_STAGE_COLORS,
-  InquiryType,
-  QuoteType,
-  RenegotiationIssue,
-  CustomerFeedbackType
-} from '@/types'
+// ============================================
+// Types (duplicated here due to Turbopack build issue with @/types imports)
+// ============================================
 
-// Re-export types from index.ts
-export {
-  DealStage,
-  DEAL_STAGE_LABELS,
-  DEAL_STAGE_COLORS,
-  InquiryType,
-  QuoteType,
-  RenegotiationIssue,
-  CustomerFeedbackType
-}
+export type DealStage =
+  | "inquiry"
+  | "deal_started"
+  | "quote_collecting"
+  | "renegotiating"
+  | "customer_feedback"
+  | "seller_feedback"
+  | "no_offer"
+  | "lost"
+  | "deal_done";
+
+export const DEAL_STAGE_LABELS: Record<DealStage, string> = {
+  inquiry: "Inquiry",
+  deal_started: "Deal Started",
+  quote_collecting: "Collecting Quotes",
+  renegotiating: "Renegotiating",
+  customer_feedback: "Awaiting Customer Feedback",
+  seller_feedback: "Awaiting Seller Feedback",
+  no_offer: "No Offer",
+  lost: "Lost",
+  deal_done: "Deal Done"
+};
+
+export const DEAL_STAGE_COLORS: Record<DealStage, string> = {
+  inquiry: "bg-blue-100 text-blue-800",
+  deal_started: "bg-indigo-100 text-indigo-800",
+  quote_collecting: "bg-purple-100 text-purple-800",
+  renegotiating: "bg-yellow-100 text-yellow-800",
+  customer_feedback: "bg-orange-100 text-orange-800",
+  seller_feedback: "bg-cyan-100 text-cyan-800",
+  no_offer: "bg-gray-100 text-gray-800",
+  lost: "bg-red-100 text-red-800",
+  deal_done: "bg-green-100 text-green-800"
+};
+
+export type InquiryType =
+  | "inquiry_single_fuel_single_port"
+  | "inquiry_single_fuel_multi_port"
+  | "inquiry_dual_fuel_single_port"
+  | "inquiry_dual_fuel_multi_port"
+  | "inquiry_triple_fuel_single_port"
+  | "inquiry_triple_fuel_multi_port";
+
+export type QuoteType =
+  | "quote_single_no_barge"
+  | "quote_single_with_barge"
+  | "quote_dual_no_barge"
+  | "quote_dual_with_barge"
+  | "quote_triple_no_barge"
+  | "quote_triple_with_barge";
+
+export type RenegotiationIssue =
+  | "schedule_issue"
+  | "credit_issue"
+  | "stock_issue"
+  | "price_issue";
+
+export type CustomerFeedbackType =
+  | "earliest_request"
+  | "price_negotiation"
+  | "lost";
 
 // ============================================
 // Field Definitions
@@ -205,15 +250,18 @@ export const INQUIRY_FULLCONTEXT: Record<InquiryType, InquiryFullContextDef> = {
   },
   inquiry_dual_fuel_multi_port: {
     required: ['vessel_name', 'port1', 'port2', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2'],
-    optional: ['imo']
+    optional: ['imo'],
+    format: '<VesselName> / <IMO> / <Port1> or <Port2> / <ETA> / <Fuel1> / <Fuel1Quantity> / <Fuel2> / <Fuel2Quantity>'
   },
   inquiry_triple_fuel_single_port: {
     required: ['vessel_name', 'port', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2', 'fuel_type3', 'quantity3'],
-    optional: ['imo']
+    optional: ['imo'],
+    format: '<VesselName> / <IMO> / <Port> / <ETA> / <Fuel1> / <Fuel1Quantity> / <Fuel2> / <Fuel2Quantity> / <Fuel3> / <Fuel3Quantity>'
   },
   inquiry_triple_fuel_multi_port: {
     required: ['vessel_name', 'port1', 'port2', 'eta', 'fuel_type', 'quantity', 'fuel_type2', 'quantity2', 'fuel_type3', 'quantity3'],
-    optional: ['imo']
+    optional: ['imo'],
+    format: '<VesselName> / <IMO> / <Port1> or <Port2> / <ETA> / <Fuel1> / <Fuel1Quantity> / <Fuel2> / <Fuel2Quantity> / <Fuel3> / <Fuel3Quantity>'
   }
 }
 
