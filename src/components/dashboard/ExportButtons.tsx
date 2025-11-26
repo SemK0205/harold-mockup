@@ -1,6 +1,6 @@
 /**
- * ExportButtons 컴포넌트
- * CSV/PDF 내보내기 버튼
+ * ExportButtons Component
+ * CSV/PDF export buttons
  */
 
 "use client";
@@ -43,13 +43,13 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
         }
       );
 
-      // 다운로드 링크 생성
+      // Create download link
       const blob = new Blob([response.data], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
 
-      // 파일명 추출 또는 기본값 설정
+      // Extract filename or set default
       const contentDisposition = response.headers["content-disposition"];
       const fileNameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
       const fileName = fileNameMatch ? fileNameMatch[1] : `deals_export_${Date.now()}.csv`;
@@ -60,11 +60,10 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // 성공 알림 (선택사항)
-      console.log("CSV 내보내기 완료");
+      console.log("CSV export completed");
     } catch (error) {
-      console.error("CSV 내보내기 실패:", error);
-      alert("CSV 내보내기에 실패했습니다.");
+      console.error("CSV export failed:", error);
+      alert("Failed to export CSV.");
     } finally {
       setIsExporting(false);
       setExportType(null);
@@ -76,12 +75,11 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
     setExportType("pdf");
 
     try {
-      // PDF 생성 로직 (클라이언트 사이드)
-      // jsPDF 또는 다른 라이브러리 사용
+      // PDF generation logic (client-side)
       const { jsPDF } = await import("jspdf");
       await import("jspdf-autotable");
 
-      // API에서 데이터 가져오기
+      // Fetch data from API
       const params = new URLSearchParams();
       if (filters.status) params.append("status", filters.status);
       if (filters.port) params.append("port", filters.port);
@@ -93,27 +91,27 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
 
       const deals = response.data.data || [];
 
-      // PDF 생성
+      // Generate PDF
       const doc = new jsPDF({ orientation: "landscape" });
 
-      // 제목
+      // Title
       doc.setFontSize(18);
-      doc.text("딜 전광판 리포트", 14, 20);
+      doc.text("Deal Scoreboard Report", 14, 20);
 
-      // 생성 일시
+      // Generated date
       doc.setFontSize(10);
-      doc.text(`생성일시: ${new Date().toLocaleString("ko-KR")}`, 14, 30);
+      doc.text(`Generated: ${new Date().toLocaleString("en-US")}`, 14, 30);
 
-      // 필터 정보
+      // Filter info
       const filterText = [];
-      if (filters.status) filterText.push(`상태: ${filters.status}`);
-      if (filters.port) filterText.push(`항구: ${filters.port}`);
-      if (filters.customer) filterText.push(`고객: ${filters.customer}`);
+      if (filters.status) filterText.push(`Status: ${filters.status}`);
+      if (filters.port) filterText.push(`Port: ${filters.port}`);
+      if (filters.customer) filterText.push(`Customer: ${filters.customer}`);
       if (filterText.length > 0) {
-        doc.text(`필터: ${filterText.join(", ")}`, 14, 36);
+        doc.text(`Filters: ${filterText.join(", ")}`, 14, 36);
       }
 
-      // 테이블 데이터 준비
+      // Prepare table data
       const tableData = deals.map((deal: any) => [
         deal.customer_room_name || "-",
         deal.vessel_name || "-",
@@ -121,36 +119,36 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
         deal.fuel_type && deal.quantity ? `${deal.fuel_type} ${deal.quantity}` : "-",
         deal.delivery_date || "-",
         deal.status === "active"
-          ? "진행중"
+          ? "Active"
           : deal.status === "quoted"
-          ? "견적수신"
+          ? "Quoted"
           : deal.status === "negotiating"
-          ? "협상중"
+          ? "Negotiating"
           : deal.status === "closed_success"
-          ? "성사"
+          ? "Success"
           : deal.status === "closed_failed"
-          ? "실패"
-          : "취소",
+          ? "Failed"
+          : "Cancelled",
         deal.total_quotes_received || 0,
         deal.final_price ? `$${deal.final_price.toLocaleString()}` : "-",
         deal.selected_trader || "-",
-        deal.created_at ? new Date(deal.created_at).toLocaleDateString("ko-KR") : "-",
+        deal.created_at ? new Date(deal.created_at).toLocaleDateString("en-US") : "-",
       ]);
 
-      // 테이블 생성
+      // Generate table
       (doc as any).autoTable({
         head: [
           [
-            "고객사",
-            "선박명",
-            "항구",
-            "연료/수량",
-            "배송일",
-            "상태",
-            "견적수",
-            "최종가격",
-            "거래처",
-            "생성일",
+            "Customer",
+            "Vessel",
+            "Port",
+            "Fuel/Qty",
+            "ETA",
+            "Status",
+            "Quotes",
+            "Final Price",
+            "Trader",
+            "Created",
           ],
         ],
         body: tableData,
@@ -170,27 +168,27 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
         },
       });
 
-      // 요약 통계
+      // Summary statistics
       const finalY = (doc as any).lastAutoTable.finalY || 45;
       doc.setFontSize(10);
-      doc.text(`총 ${deals.length}건의 딜`, 14, finalY + 10);
+      doc.text(`Total ${deals.length} deals`, 14, finalY + 10);
 
       const successCount = deals.filter((d: any) => d.status === "closed_success").length;
       const activeCount = deals.filter((d: any) => d.status === "active").length;
       doc.text(
-        `성사: ${successCount}건 | 진행중: ${activeCount}건`,
+        `Success: ${successCount} | Active: ${activeCount}`,
         14,
         finalY + 16
       );
 
-      // PDF 저장
+      // Save PDF
       const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       doc.save(`deals_report_${timestamp}.pdf`);
 
-      console.log("PDF 내보내기 완료");
+      console.log("PDF export completed");
     } catch (error) {
-      console.error("PDF 내보내기 실패:", error);
-      alert("PDF 내보내기에 실패했습니다.");
+      console.error("PDF export failed:", error);
+      alert("Failed to export PDF.");
     } finally {
       setIsExporting(false);
       setExportType(null);
@@ -211,7 +209,7 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
         ) : (
           <FileText className="w-3.5 h-3.5" />
         )}
-        CSV 내보내기
+        Export CSV
       </Button>
 
       <Button
@@ -226,7 +224,7 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
         ) : (
           <Download className="w-3.5 h-3.5" />
         )}
-        PDF 내보내기
+        Export PDF
       </Button>
     </div>
   );

@@ -7,6 +7,37 @@
 // Trading Session Types
 // ============================================
 
+// 판매자별 개별 컨텍스트 (각 판매자의 진행 단계)
+export type SellerStatus = "waiting_quote" | "quote_received" | "no_offer" | "renegotiating";
+
+export interface SellerQuoteData {
+  fuel1_price?: string;
+  fuel2_price?: string;
+  fuel3_price?: string;
+  barge_fee?: string;
+}
+
+export interface SellerContext {
+  status: SellerStatus;
+  quote: SellerQuoteData | null;
+  earliest?: string | null;
+  requested_at?: string;
+  received_at?: string;
+  no_offer_reason?: string;
+  // 수집 필요 필드 (단계에 따라 동적으로 결정)
+  required_fields?: SellerRequiredField[];
+}
+
+// 판매자에게 수집해야 하는 필드 정의
+export interface SellerRequiredField {
+  key: keyof SellerQuoteData | "earliest" | "no_offer_reason";
+  label: string;
+  label_ko: string;
+  required: boolean;  // 필수 여부
+  filled: boolean;    // 채워졌는지 여부
+  value?: string;     // 현재 값
+}
+
 export interface TradingSession {
   session_id: string; // UUID
   customer_room_name: string;
@@ -23,6 +54,8 @@ export interface TradingSession {
   status: "active" | "closed";
   created_at: string; // ISO timestamp
   closed_at: string | null; // ISO timestamp
+  seller_contexts?: Record<string, SellerContext>; // 판매자별 개별 컨텍스트
+  stage?: string; // 현재 딜 단계
 }
 
 export interface Quote {
@@ -285,6 +318,18 @@ export const DEAL_STAGE_LABELS: Record<DealStage, string> = {
   deal_done: "Deal Done"
 };
 
+export const DEAL_STAGE_LABELS_KO: Record<DealStage, string> = {
+  inquiry: "인쿼리",
+  deal_started: "딜 시작",
+  quote_collecting: "오퍼가격 취합",
+  renegotiating: "조건 재협상",
+  customer_feedback: "선주 피드백",
+  seller_feedback: "판매측 피드백",
+  no_offer: "노오퍼",
+  lost: "로스트",
+  deal_done: "딜던"
+};
+
 export const DEAL_STAGE_COLORS: Record<DealStage, string> = {
   inquiry: "bg-blue-100 text-blue-800",
   deal_started: "bg-indigo-100 text-indigo-800",
@@ -296,6 +341,163 @@ export const DEAL_STAGE_COLORS: Record<DealStage, string> = {
   lost: "bg-red-100 text-red-800",
   deal_done: "bg-green-100 text-green-800"
 };
+
+// ============================================
+// Seller Required Fields by Stage
+// ============================================
+
+/**
+ * 딜 단계와 유종 개수에 따라 판매자에게 수집해야 할 필드 목록 생성
+ * @param stage 현재 딜 단계
+ * @param fuelCount 유종 개수 (1, 2, 또는 3)
+ * @param sellerContext 현재 판매자 컨텍스트 (기존 값 확인용)
+ */
+export function getSellerRequiredFields(
+  stage: DealStage,
+  fuelCount: number,
+  sellerContext?: SellerContext | null
+): SellerRequiredField[] {
+  const fields: SellerRequiredField[] = [];
+  const quote = sellerContext?.quote;
+
+  // 오퍼가격취합 단계에서 필요한 필드
+  if (stage === "quote_collecting" || stage === "deal_started") {
+    // Fuel1 Price (항상 필요)
+    fields.push({
+      key: "fuel1_price",
+      label: "Fuel1 Price",
+      label_ko: "유종1 가격",
+      required: true,
+      filled: !!quote?.fuel1_price,
+      value: quote?.fuel1_price
+    });
+
+    // Fuel2 Price (이종 유종인 경우)
+    if (fuelCount >= 2) {
+      fields.push({
+        key: "fuel2_price",
+        label: "Fuel2 Price",
+        label_ko: "유종2 가격",
+        required: true,
+        filled: !!quote?.fuel2_price,
+        value: quote?.fuel2_price
+      });
+    }
+
+    // Fuel3 Price (3종 유종인 경우)
+    if (fuelCount >= 3) {
+      fields.push({
+        key: "fuel3_price",
+        label: "Fuel3 Price",
+        label_ko: "유종3 가격",
+        required: true,
+        filled: !!quote?.fuel3_price,
+        value: quote?.fuel3_price
+      });
+    }
+
+    // Barge Fee (선택사항 - 판매자가 제공하면 추가됨)
+    fields.push({
+      key: "barge_fee",
+      label: "Barge Fee",
+      label_ko: "바지선 비용",
+      required: false,
+      filled: !!quote?.barge_fee,
+      value: quote?.barge_fee
+    });
+  }
+
+  // 재협상 단계에서 추가 필드
+  if (stage === "renegotiating") {
+    // 가격 필드도 포함 (재협상이므로)
+    fields.push({
+      key: "fuel1_price",
+      label: "Fuel1 Price",
+      label_ko: "유종1 가격",
+      required: true,
+      filled: !!quote?.fuel1_price,
+      value: quote?.fuel1_price
+    });
+    if (fuelCount >= 2) {
+      fields.push({
+        key: "fuel2_price",
+        label: "Fuel2 Price",
+        label_ko: "유종2 가격",
+        required: true,
+        filled: !!quote?.fuel2_price,
+        value: quote?.fuel2_price
+      });
+    }
+    fields.push({
+      key: "barge_fee",
+      label: "Barge Fee",
+      label_ko: "바지선 비용",
+      required: false,
+      filled: !!quote?.barge_fee,
+      value: quote?.barge_fee
+    });
+    fields.push({
+      key: "earliest",
+      label: "Earliest Available",
+      label_ko: "최단 공급 가능일",
+      required: false,
+      filled: !!sellerContext?.earliest,
+      value: sellerContext?.earliest || undefined
+    });
+  }
+
+  // 판매측 피드백 단계 - 가격 재협상 응답 대기
+  if (stage === "seller_feedback") {
+    fields.push({
+      key: "fuel1_price",
+      label: "New Fuel1 Price",
+      label_ko: "새 유종1 가격",
+      required: false,
+      filled: !!quote?.fuel1_price,
+      value: quote?.fuel1_price
+    });
+    if (fuelCount >= 2) {
+      fields.push({
+        key: "fuel2_price",
+        label: "New Fuel2 Price",
+        label_ko: "새 유종2 가격",
+        required: false,
+        filled: !!quote?.fuel2_price,
+        value: quote?.fuel2_price
+      });
+    }
+    fields.push({
+      key: "barge_fee",
+      label: "Barge Fee",
+      label_ko: "바지선 비용",
+      required: false,
+      filled: !!quote?.barge_fee,
+      value: quote?.barge_fee
+    });
+  }
+
+  return fields;
+}
+
+/**
+ * 필수 필드가 모두 채워졌는지 확인
+ */
+export function areRequiredFieldsFilled(fields: SellerRequiredField[]): boolean {
+  return fields.filter(f => f.required).every(f => f.filled);
+}
+
+/**
+ * 채워진 필드 개수 / 전체 필드 개수 계산
+ */
+export function getFieldCompletionRatio(fields: SellerRequiredField[]): { filled: number; total: number; percentage: number } {
+  const requiredFields = fields.filter(f => f.required);
+  const filledCount = requiredFields.filter(f => f.filled).length;
+  return {
+    filled: filledCount,
+    total: requiredFields.length,
+    percentage: requiredFields.length > 0 ? Math.round((filledCount / requiredFields.length) * 100) : 100
+  };
+}
 
 // ============================================
 // Inquiry FullContext Types
@@ -324,6 +526,196 @@ export interface InquiryFullContext {
   Fuel2Quantity?: string;
   Fuel3?: string;
   Fuel3Quantity?: string;
+}
+
+// 인쿼리 수집 필드 정의
+export interface InquiryRequiredField {
+  key: keyof InquiryFullContext;
+  label: string;
+  label_ko: string;
+  required: boolean;
+  filled: boolean;
+  value?: string;
+  question_ko?: string; // 미완성 시 물어볼 질문
+}
+
+/**
+ * 인쿼리 단계에서 선주측으로부터 수집해야 할 필드 목록 생성
+ * @param fuelCount 유종 개수 (1, 2, 또는 3)
+ * @param isMultiPort 다중 포트 여부
+ * @param context 현재 인쿼리 컨텍스트
+ */
+export function getInquiryRequiredFields(
+  fuelCount: number,
+  isMultiPort: boolean,
+  context?: InquiryFullContext | null
+): InquiryRequiredField[] {
+  const fields: InquiryRequiredField[] = [];
+
+  // 선박명 (필수)
+  fields.push({
+    key: "VesselName",
+    label: "Vessel Name",
+    label_ko: "선박명",
+    required: true,
+    filled: !!context?.VesselName,
+    value: context?.VesselName,
+    question_ko: "배 이름이 어떻게 되나요?"
+  });
+
+  // IMO (선택 - 직접 조회해서 추가)
+  fields.push({
+    key: "IMO",
+    label: "IMO Number",
+    label_ko: "IMO 번호",
+    required: false,
+    filled: !!context?.IMO,
+    value: context?.IMO
+  });
+
+  // 포트
+  if (isMultiPort) {
+    fields.push({
+      key: "Port1",
+      label: "Port 1",
+      label_ko: "포트1",
+      required: true,
+      filled: !!context?.Port1,
+      value: context?.Port1,
+      question_ko: "포트가 어떻게 되나요?"
+    });
+    fields.push({
+      key: "Port2",
+      label: "Port 2",
+      label_ko: "포트2",
+      required: true,
+      filled: !!context?.Port2,
+      value: context?.Port2
+    });
+  } else {
+    fields.push({
+      key: "Port",
+      label: "Port",
+      label_ko: "포트",
+      required: true,
+      filled: !!context?.Port,
+      value: context?.Port,
+      question_ko: "포트가 어떻게 되나요?"
+    });
+  }
+
+  // ETA (필수)
+  fields.push({
+    key: "ETA",
+    label: "ETA",
+    label_ko: "ETA",
+    required: true,
+    filled: !!context?.ETA,
+    value: context?.ETA,
+    question_ko: "ETA가 어떻게 되나요?"
+  });
+
+  // 유종별 필드
+  if (fuelCount === 1) {
+    fields.push({
+      key: "Fuel",
+      label: "Fuel Type",
+      label_ko: "유종",
+      required: true,
+      filled: !!context?.Fuel,
+      value: context?.Fuel
+    });
+    fields.push({
+      key: "FuelQuantity",
+      label: "Quantity",
+      label_ko: "수량",
+      required: true,
+      filled: !!context?.FuelQuantity,
+      value: context?.FuelQuantity,
+      question_ko: "양이 어떻게 되나요?"
+    });
+  } else {
+    // Fuel1
+    fields.push({
+      key: "Fuel1",
+      label: "Fuel1 Type",
+      label_ko: "유종1",
+      required: true,
+      filled: !!context?.Fuel1,
+      value: context?.Fuel1
+    });
+    fields.push({
+      key: "Fuel1Quantity",
+      label: "Fuel1 Quantity",
+      label_ko: "유종1 수량",
+      required: true,
+      filled: !!context?.Fuel1Quantity,
+      value: context?.Fuel1Quantity,
+      question_ko: "양이 어떻게 되나요?"
+    });
+
+    // Fuel2
+    fields.push({
+      key: "Fuel2",
+      label: "Fuel2 Type",
+      label_ko: "유종2",
+      required: true,
+      filled: !!context?.Fuel2,
+      value: context?.Fuel2
+    });
+    fields.push({
+      key: "Fuel2Quantity",
+      label: "Fuel2 Quantity",
+      label_ko: "유종2 수량",
+      required: true,
+      filled: !!context?.Fuel2Quantity,
+      value: context?.Fuel2Quantity
+    });
+
+    // Fuel3 (3종인 경우)
+    if (fuelCount >= 3) {
+      fields.push({
+        key: "Fuel3",
+        label: "Fuel3 Type",
+        label_ko: "유종3",
+        required: true,
+        filled: !!context?.Fuel3,
+        value: context?.Fuel3
+      });
+      fields.push({
+        key: "Fuel3Quantity",
+        label: "Fuel3 Quantity",
+        label_ko: "유종3 수량",
+        required: true,
+        filled: !!context?.Fuel3Quantity,
+        value: context?.Fuel3Quantity
+      });
+    }
+  }
+
+  return fields;
+}
+
+/**
+ * 인쿼리 FullContext 완성도 계산
+ */
+export function getInquiryCompletionRatio(fields: InquiryRequiredField[]): { filled: number; total: number; percentage: number } {
+  const requiredFields = fields.filter(f => f.required);
+  const filledCount = requiredFields.filter(f => f.filled).length;
+  return {
+    filled: filledCount,
+    total: requiredFields.length,
+    percentage: requiredFields.length > 0 ? Math.round((filledCount / requiredFields.length) * 100) : 100
+  };
+}
+
+/**
+ * 미완성 필드에 대한 질문 목록 생성
+ */
+export function getMissingFieldQuestions(fields: InquiryRequiredField[]): string[] {
+  return fields
+    .filter(f => f.required && !f.filled && f.question_ko)
+    .map(f => f.question_ko!);
 }
 
 // ============================================
@@ -389,6 +781,8 @@ export interface DealScoreboard {
   response_time_minutes: number | null;
   quote_count: number;
   last_quote_time: string | null;
+  requested_traders?: string[]; // 요청된 판매자 목록
+  seller_contexts?: Record<string, SellerContext>; // 판매자별 컨텍스트
 }
 
 export interface DealStatistics {

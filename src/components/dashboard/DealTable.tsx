@@ -12,14 +12,26 @@ import { DealScoreboard } from "@/types";
 interface DealTableProps {
   deals: DealScoreboard[];
   onDealClick: (deal: DealScoreboard) => void;
+  onStatusChange?: (sessionId: string, newStatus: DealScoreboard["status"]) => void;
 }
 
 type SortField = "created_at" | "vessel_name" | "port" | "delivery_date" | "status";
 type SortDirection = "asc" | "desc";
 
-export function DealTable({ deals, onDealClick }: DealTableProps) {
+// Status 설정
+const STATUS_OPTIONS: { value: DealScoreboard["status"]; label: string; color: string }[] = [
+  { value: "active", label: "In Progress", color: "bg-blue-500" },
+  { value: "quoted", label: "Quote Received", color: "bg-purple-500" },
+  { value: "negotiating", label: "Negotiating", color: "bg-yellow-500" },
+  { value: "closed_success", label: "Completed", color: "bg-green-500" },
+  { value: "closed_failed", label: "Failed", color: "bg-red-500" },
+  { value: "cancelled", label: "Cancelled", color: "bg-gray-500" },
+];
+
+export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps) {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
 
   // 정렬 핸들러
   const handleSort = (field: SortField) => {
@@ -217,9 +229,41 @@ export function DealTable({ deals, onDealClick }: DealTableProps) {
                   </div>
                 </td>
 
-                {/* 상태 */}
+                {/* 상태 - 클릭하여 변경 가능 */}
                 <td className="px-4 py-3">
-                  {getStatusBadge(deal.status)}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setStatusDropdownOpen(statusDropdownOpen === deal.session_id ? null : deal.session_id);
+                      }}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    >
+                      {getStatusBadge(deal.status)}
+                    </button>
+                    {statusDropdownOpen === deal.session_id && (
+                      <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[140px]">
+                        {STATUS_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onStatusChange) {
+                                onStatusChange(deal.session_id, option.value);
+                              }
+                              setStatusDropdownOpen(null);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 flex items-center gap-2 ${
+                              deal.status === option.value ? "bg-gray-50 font-medium" : ""
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${option.color}`} />
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </td>
 
                 {/* 생성일시 */}

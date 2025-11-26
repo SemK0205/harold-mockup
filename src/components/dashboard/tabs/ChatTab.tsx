@@ -41,9 +41,12 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
   const { messages, isLoading } = useSessionMessagesSSE({ sessionId });
   const sendMessageMutation = useSendMessage();
 
-  // 우리 회사 발신자인지 확인
-  const isOurCompanySender = (sender: string): boolean => {
-    return OUR_COMPANY_SENDERS.includes(sender);
+  // 우리 회사 발신자인지 확인 (direction 필드 또는 sender 이름으로 판단)
+  const checkIsOurMessage = (msg: ChatMessage): boolean => {
+    // 1. direction 필드가 있으면 우선 사용
+    if (msg.direction === 'outgoing') return true;
+    // 2. sender 이름으로 부분 일치 검사
+    return OUR_COMPANY_SENDERS.some(companySender => msg.sender?.includes(companySender));
   };
 
   const [selectedRoom, setSelectedRoom] = useState<string>(customerRoom);
@@ -176,7 +179,7 @@ export function ChatTab({ sessionId, customerRoom, traderRooms }: ChatTabProps) 
           </div>
         ) : (
           currentMessages.map((msg) => {
-            const isOurMessage = isOurCompanySender(msg.sender);
+            const isOurMessage = checkIsOurMessage(msg);
             return (
               <div
                 key={msg.message_id}

@@ -4,7 +4,7 @@
  * Global store와 격리되어 충돌 방지
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import type { ChatMessage, TradingSession, AISuggestion } from '@/types';
 
 interface ModalColumn {
@@ -71,6 +71,19 @@ interface DealModalProviderProps {
 export function DealModalProvider({ children, session: initialSession }: DealModalProviderProps) {
   // Session
   const [session, setSession] = useState<TradingSession | null>(initialSession);
+
+  // Sync session state when initialSession prop changes (fixes issue where all inquiries show the same data)
+  useEffect(() => {
+    setSession(initialSession);
+    // Reset related states when session changes
+    setBuyerMessages([]);
+    setSellerMessages(new Map());
+    setSellerTabs([]);
+    setActiveSellerTab(null);
+    setAiSuggestions([]);
+    setSelectedSuggestions(new Set());
+    setFullContextCompletion(0);
+  }, [initialSession?.session_id]);
 
   // Column sizes - AI 컬럼 확대, 판매자 컬럼 축소
   const [columns, setColumns] = useState({

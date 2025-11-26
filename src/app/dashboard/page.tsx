@@ -1,6 +1,6 @@
 /**
- * Dashboard Page (딜 전광판)
- * 칸반 보드 형식의 딜 파이프라인 + 통계
+ * Dashboard Page (Deal Scoreboard)
+ * Deal pipeline in table/timeline format + statistics
  */
 
 "use client";
@@ -48,6 +48,28 @@ export default function DashboardPage() {
     setIsModalOpen(true);
   };
 
+  // Status 변경 핸들러
+  const handleStatusChange = async (sessionId: string, newStatus: DealScoreboardType["status"]) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/sessions/${sessionId}/status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+      if (response.ok) {
+        console.log(`Status changed to ${newStatus} for session ${sessionId}`);
+        // SSE가 자동으로 업데이트하므로 추가 작업 불필요
+      } else {
+        console.error("Failed to update status:", await response.text());
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
+  };
+
   // DealScoreboardType을 TradingSession으로 변환 (모달용)
   const convertToSession = (deal: DealScoreboardType | null): TradingSession | null => {
     if (!deal) return null;
@@ -62,11 +84,13 @@ export default function DashboardPage() {
       fuel_type2: deal.fuel_type2,
       quantity2: deal.quantity2,
       delivery_date: deal.delivery_date,
-      requested_traders: (deal as any).requested_traders || [],
+      requested_traders: deal.requested_traders || [],
       quotes: (deal as any).quotes || [],
       status: deal.status === "active" ? "active" : "closed",
       created_at: deal.created_at,
       closed_at: deal.closed_at,
+      seller_contexts: deal.seller_contexts,
+      stage: deal.stage,
     };
   };
 
@@ -76,9 +100,9 @@ export default function DashboardPage() {
         {/* 헤더 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold">딜 전광판</h1>
+            <h1 className="text-2xl font-bold">Deal Scoreboard</h1>
 
-            {/* 실시간 연결 상태 표시 */}
+            {/* Real-time connection status */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-xs">
               <span
                 className={`w-2 h-2 rounded-full animate-pulse ${
@@ -86,7 +110,7 @@ export default function DashboardPage() {
                 }`}
               />
               <span className="text-gray-600">
-                {isConnected ? "실시간 연결됨" : "연결 중..."}
+                {isConnected ? "Live" : "Connecting..."}
               </span>
             </div>
           </div>
@@ -104,7 +128,7 @@ export default function DashboardPage() {
             )}
 
             <div className="text-sm text-gray-500">
-              총 {deals.length}건
+              Total {deals.length} deals
             </div>
             <div className="flex gap-2">
               <Button
@@ -112,60 +136,60 @@ export default function DashboardPage() {
                 size="sm"
                 onClick={() => setViewMode("table")}
               >
-                테이블
+                Table
               </Button>
               <Button
                 variant={viewMode === "timeline" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("timeline")}
               >
-                타임라인
+                Timeline
               </Button>
               <Button
                 variant={viewMode === "statistics" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("statistics")}
               >
-                통계
+                Statistics
               </Button>
             </div>
           </div>
         </div>
 
-        {/* 필터 */}
+        {/* Filters */}
         {(viewMode === "table" || viewMode === "timeline") && (
           <div className="bg-white rounded-lg border p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">포트</label>
+                <label className="text-xs text-gray-600 mb-1 block">Port</label>
                 <Input
-                  placeholder="포트 필터 (예: 부산)"
+                  placeholder="Filter by port (e.g. Busan)"
                   value={portFilter}
                   onChange={(e) => setPortFilter(e.target.value)}
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">고객사</label>
+                <label className="text-xs text-gray-600 mb-1 block">Customer</label>
                 <Input
-                  placeholder="고객사 필터 (예: ORION)"
+                  placeholder="Filter by customer (e.g. ORION)"
                   value={customerFilter}
                   onChange={(e) => setCustomerFilter(e.target.value)}
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">상태</label>
+                <label className="text-xs text-gray-600 mb-1 block">Status</label>
                 <select
                   className="w-full h-9 px-3 border border-gray-200 rounded-md text-sm"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
-                  <option value="">전체</option>
-                  <option value="active">활성</option>
-                  <option value="quoted">견적 수신</option>
-                  <option value="negotiating">협상 중</option>
-                  <option value="closed_success">성공</option>
-                  <option value="closed_failed">실패</option>
-                  <option value="cancelled">취소</option>
+                  <option value="">All</option>
+                  <option value="active">Active</option>
+                  <option value="quoted">Quoted</option>
+                  <option value="negotiating">Negotiating</option>
+                  <option value="closed_success">Success</option>
+                  <option value="closed_failed">Failed</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
               </div>
             </div>
@@ -180,23 +204,23 @@ export default function DashboardPage() {
                     setStatusFilter("");
                   }}
                 >
-                  필터 초기화
+                  Clear Filters
                 </Button>
               </div>
             )}
           </div>
         )}
 
-        {/* 로딩 */}
+        {/* Loading */}
         {!isConnected && deals.length === 0 && (viewMode === "table" || viewMode === "timeline") && (
           <div className="flex items-center justify-center py-12">
-            <div className="text-gray-500">로딩 중...</div>
+            <div className="text-gray-500">Loading...</div>
           </div>
         )}
 
         {/* 테이블 뷰 */}
         {viewMode === "table" && (isConnected || deals.length > 0) && (
-          <DealTable deals={deals} onDealClick={handleDealClick} />
+          <DealTable deals={deals} onDealClick={handleDealClick} onStatusChange={handleStatusChange} />
         )}
 
         {/* 타임라인 뷰 */}

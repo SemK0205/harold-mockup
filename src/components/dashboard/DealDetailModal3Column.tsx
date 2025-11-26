@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import type { TradingSession, ChatMessage, AISuggestion } from "@/types";
+import type { TradingSession, ChatMessage, AISuggestion, SellerStatus, SellerContext, DealStage, SellerRequiredField } from "@/types";
+import { getSellerRequiredFields, getFieldCompletionRatio, DEAL_STAGE_LABELS_KO } from "@/types";
 import { DealModalProvider, useDealModal } from "@/contexts/DealModalContext";
 import { useSSEManager } from "@/hooks/useSSEManager";
 import SSEConnectionManager from "@/lib/sse/SSEConnectionManager";
@@ -255,8 +256,27 @@ const BuyerChatColumn = memo(() => {
           const data = await response.json();
           // 백엔드 응답: { data: [...], total, page, limit }
           const messages = Array.isArray(data) ? data : (data.data || []);
-          // ChatMessage 형식으로 변환 - sender 기준으로 direction 결정
-          const ourSenders = ['Harold', '씨너지파트너', 'Seanergy', '김성원', '김민석', '권예정'];
+          // ChatMessage 형식으로 변환 - direction 필드 우선, 없으면 sender 기준
+          const ourSenders = ['Harold', 
+                              '씨너지파트너', 
+                              'Seanergy', 
+                              'seanergyAI', 
+                              'SeanergyAI', 
+                              '김성원', 
+                              '김민석', 
+                              '권우정', 
+                              'Yong', 
+                              'Kenn', 
+                              'Me', 
+                              '나',
+                              '씨너지파트너 주식회사',    
+                              '씨너지파트너AI',    
+                              'Seanergy AI',    
+                              'Harold AI',    
+                              'Yong Oh',         
+                              'Kenn Kwon',    
+                              'Kenn Kwon (SEANERGY PARTNER)',    
+                              'seanergy ai'];
           setBuyerMessages(messages.map((msg: any) => ({
             message_id: msg.id || msg.message_id,
             room_name: msg.room_name,
@@ -264,7 +284,7 @@ const BuyerChatColumn = memo(() => {
             message: msg.message,
             timestamp: msg.created_at,
             package_name: msg.platform || 'com.kakao.talk',
-            direction: ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' : 'incoming',
+            direction: msg.direction || (ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' : 'incoming'),
             created_at: msg.created_at
           })));
         }
@@ -343,12 +363,15 @@ const BuyerChatColumn = memo(() => {
 
   return (
     <div className="flex flex-col h-full">
+      {/* 헤더 */}
       <div className="p-3 border-b bg-white">
         <h3 className="font-semibold flex items-center gap-2">
           <MessageSquare className="w-4 h-4" />
           Buyer Chat
-          <Badge variant="secondary" className="ml-auto">
-            {session?.customer_room_name}
+          <Badge variant="secondary" className="ml-auto text-xs">
+            {session?.customer_room_name && session.customer_room_name.length > 15
+              ? `${session.customer_room_name.slice(0, 15)}...`
+              : session?.customer_room_name}
           </Badge>
         </h3>
       </div>
@@ -1013,6 +1036,14 @@ const AIAssistantColumn = memo(() => {
 });
 AIAssistantColumn.displayName = 'AIAssistantColumn';
 
+// Seller status labels and styles
+const SELLER_STATUS_CONFIG: Record<SellerStatus, { label: string; color: string }> = {
+  waiting_quote: { label: "Waiting", color: "bg-yellow-100 text-yellow-800" },
+  quote_received: { label: "Quoted", color: "bg-green-100 text-green-800" },
+  no_offer: { label: "No Offer", color: "bg-gray-100 text-gray-600" },
+  renegotiating: { label: "Renegotiating", color: "bg-blue-100 text-blue-800" }
+};
+
 // Seller Chats Column
 const SellerChatsColumn = memo(() => {
   const {
@@ -1029,8 +1060,111 @@ const SellerChatsColumn = memo(() => {
     roomPlatforms
   } = useDealModal();
 
+  // 로컬 seller_contexts 상태 (UI 즉시 반영용)
+  const [localSellerContexts, setLocalSellerContexts] = useState<Record<string, SellerContext>>({});
+
+  // session.seller_contexts가 변경되면 로컬 상태 동기화
+  useEffect(() => {
+    if (session?.seller_contexts) {
+      setLocalSellerContexts(session.seller_contexts);
+    }
+  }, [session?.seller_contexts]);
+
+  // 판매자 상태 가져오기 (로컬 상태 우선)
+  const getSellerStatus = (trader: string): SellerStatus => {
+    return localSellerContexts[trader]?.status || session?.seller_contexts?.[trader]?.status || "waiting_quote";
+  };
+
+  // 현재 seller context 가져오기
+  const getSellerContext = (trader: string): SellerContext | undefined => {
+    return localSellerContexts[trader] || session?.seller_contexts?.[trader];
+  };
+
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const initializedRef = useRef(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
+
+  // Unread message counts per trader
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+
+  // Clear unread count when tab becomes active
+  useEffect(() => {
+    if (activeSellerTab && unreadCounts[activeSellerTab] > 0) {
+      setUnreadCounts(prev => ({ ...prev, [activeSellerTab]: 0 }));
+    }
+  }, [activeSellerTab]);
+
+  // seller_contexts 업데이트 API 호출
+  const updateSellerContext = async (
+    trader: string,
+    field: string,
+    value: string
+  ) => {
+    if (!session?.session_id) return;
+
+    try {
+      // 필드에 따라 적절한 업데이트 구성
+      let updatePayload: {
+        status?: string;
+        quote?: Record<string, string>;
+        no_offer_reason?: string;
+        earliest?: string;
+      } = {};
+
+      // 가격 관련 필드는 quote 객체에 넣기
+      if (field.includes('price') || field === 'barge_fee') {
+        const currentQuote = session.seller_contexts?.[trader]?.quote || {};
+        updatePayload.quote = { ...currentQuote, [field]: value };
+        // 견적이 수신되면 상태도 업데이트
+        if (value) {
+          updatePayload.status = 'quote_received';
+        }
+      } else if (field === 'earliest') {
+        updatePayload.earliest = value;
+      } else if (field === 'no_offer_reason') {
+        updatePayload.no_offer_reason = value;
+        updatePayload.status = 'no_offer';
+      } else if (field === 'status') {
+        updatePayload.status = value;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/sessions/${session.session_id}/seller-context/${encodeURIComponent(trader)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatePayload)
+        }
+      );
+
+      if (response.ok) {
+        console.log(`seller_context 업데이트 성공: ${trader}.${field} = ${value}`);
+        // 로컬 상태 즉시 업데이트
+        setLocalSellerContexts(prev => {
+          const current = prev[trader] || { status: 'waiting_quote' as SellerStatus, quote: null };
+          const updated = { ...current };
+
+          if (field === 'status') {
+            updated.status = value as SellerStatus;
+          } else if (field.includes('price') || field === 'barge_fee') {
+            updated.quote = { ...(updated.quote || {}), [field]: value };
+            if (value) updated.status = 'quote_received';
+          } else if (field === 'earliest') {
+            updated.earliest = value;
+          } else if (field === 'no_offer_reason') {
+            updated.no_offer_reason = value;
+            updated.status = 'no_offer';
+          }
+
+          return { ...prev, [trader]: updated };
+        });
+      } else {
+        console.error('seller_context 업데이트 실패:', await response.text());
+      }
+    } catch (error) {
+      console.error('seller_context 업데이트 오류:', error);
+    }
+  };
 
   // Initialize tabs from session and load initial messages
   useEffect(() => {
@@ -1052,8 +1186,8 @@ const SellerChatsColumn = memo(() => {
             const data = await response.json();
             // 백엔드 응답: { data: [...], total, page, limit }
             const messages = Array.isArray(data) ? data : (data.data || []);
-            // ChatMessage 형식으로 변환 - sender 기준으로 direction 결정
-            const ourSenders = ['Harold', '씨너지파트너', 'Seanergy', '김성원', '김민석', '권예정'];
+            // ChatMessage 형식으로 변환 - direction 필드 우선, 없으면 sender 기준
+            const ourSenders = ['Harold', '씨너지파트너', 'Seanergy', 'seanergyAI', 'SeanergyAI', '김성원', '김민석', '권예정', 'Yong', 'Kenn', 'Me', '나'];
             const formattedMessages: ChatMessage[] = messages.map((msg: any) => ({
               message_id: msg.id || msg.message_id,
               room_name: msg.room_name,
@@ -1061,7 +1195,7 @@ const SellerChatsColumn = memo(() => {
               message: msg.message,
               timestamp: msg.created_at,
               package_name: msg.platform || platform,
-              direction: ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' as const : 'incoming' as const,
+              direction: (msg.direction || (ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' : 'incoming')) as 'incoming' | 'outgoing',
               created_at: msg.created_at
             }));
             setSellerMessagesForTrader(trader, formattedMessages);
@@ -1086,6 +1220,13 @@ const SellerChatsColumn = memo(() => {
     sellerTabs.forEach(trader => {
       const unsubscribe = manager.subscribe(trader, (message) => {
         addSellerMessage(trader, message);
+        // Increment unread count if this tab is not active and message is incoming
+        if (trader !== activeSellerTab && message.direction !== 'outgoing') {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [trader]: (prev[trader] || 0) + 1
+          }));
+        }
       });
       unsubscribes.push(unsubscribe);
     });
@@ -1093,7 +1234,7 @@ const SellerChatsColumn = memo(() => {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [sellerTabs, session, addSellerMessage]);
+  }, [sellerTabs, session, addSellerMessage, activeSellerTab]);
 
   const handleSend = async (trader: string) => {
     const inputValue = inputValues[trader] || '';
@@ -1142,12 +1283,13 @@ const SellerChatsColumn = memo(() => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b bg-white">
-        <h3 className="font-semibold flex items-center gap-2">
+      {/* 헤더 */}
+      <div className="p-2 border-b bg-white flex-shrink-0">
+        <h3 className="font-semibold flex items-center gap-2 text-sm">
           <MessageSquare className="w-4 h-4" />
           Seller Chats
           {sellerTabs.length > 0 && (
-            <Badge variant="secondary" className="ml-auto">
+            <Badge variant="secondary" className="ml-auto text-xs">
               {sellerTabs.length}
             </Badge>
           )}
@@ -1159,58 +1301,128 @@ const SellerChatsColumn = memo(() => {
           No connected sellers
         </div>
       ) : (
-        <Tabs
-          value={activeSellerTab || ''}
-          onValueChange={setActiveSellerTab}
-          className="flex flex-col flex-1 min-h-0 overflow-hidden"
-        >
-          <div className="relative flex-shrink-0 border-b">
-            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-              <TabsList className="inline-flex w-max min-w-full justify-start rounded-none px-2 bg-transparent h-auto py-1">
-                {sellerTabs.map((trader, index) => (
-                  <TabsTrigger
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {/* 상단 탭 영역 (30%) */}
+          <div className="h-[30%] flex-shrink-0 border-b bg-gray-50 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-1 p-2">
+              {sellerTabs.map((trader) => {
+                const status = getSellerStatus(trader);
+                const statusConfig = SELLER_STATUS_CONFIG[status];
+                const isActive = activeSellerTab === trader;
+                const sellerCtx = getSellerContext(trader);
+
+                return (
+                  <div
                     key={trader}
-                    value={trader}
-                    className="relative group flex-shrink-0 px-3 py-1.5 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md"
+                    onClick={() => setActiveSellerTab(trader)}
+                    className={cn(
+                      "relative cursor-pointer rounded-lg p-2 transition-all",
+                      "border-2",
+                      isActive
+                        ? "border-blue-500 bg-blue-50 shadow-sm"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                    )}
                   >
-                    <span className="truncate max-w-[120px]" title={trader}>
-                      {trader.length > 15 ? `${trader.slice(0, 15)}...` : trader}
-                    </span>
-                    <span
-                      className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-red-500"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeSellerTab(trader);
-                      }}
-                    >
-                      <X className="w-3 h-3" />
-                    </span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+
+                    <div>
+                      {/* 판매자 이름 + 상태 */}
+                      <div className="flex items-center justify-between gap-1">
+                        <span
+                          className="text-xs font-medium text-gray-800 truncate"
+                          title={trader}
+                        >
+                          {trader.length > 10 ? `${trader.slice(0, 10)}..` : trader}
+                        </span>
+                        {/* Unread message badge */}
+                        {unreadCounts[trader] > 0 && (
+                          <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-red-500 text-white rounded-full animate-pulse min-w-[18px] text-center">
+                            {unreadCounts[trader] > 99 ? '99+' : unreadCounts[trader]}
+                          </span>
+                        )}
+                        {/* Status dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStatusDropdownOpen(statusDropdownOpen === trader ? null : trader);
+                            }}
+                            className={cn(
+                              "text-[9px] px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity",
+                              statusConfig.color
+                            )}
+                          >
+                            {statusConfig.label} ▾
+                          </button>
+                          {statusDropdownOpen === trader && (
+                            <div className="absolute right-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg py-1 min-w-[120px]">
+                              {(Object.entries(SELLER_STATUS_CONFIG) as [SellerStatus, { label: string; color: string }][]).map(([statusKey, config]) => (
+                                <button
+                                  key={statusKey}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateSellerContext(trader, 'status', statusKey);
+                                    setStatusDropdownOpen(null);
+                                  }}
+                                  className={cn(
+                                    "w-full text-left px-3 py-1.5 text-[10px] hover:bg-gray-100 flex items-center gap-2",
+                                    status === statusKey && "bg-gray-50 font-medium"
+                                  )}
+                                >
+                                  <span className={cn(
+                                    "w-2 h-2 rounded-full",
+                                    statusKey === "waiting_quote" && "bg-yellow-400",
+                                    statusKey === "quote_received" && "bg-green-400",
+                                    statusKey === "no_offer" && "bg-gray-400",
+                                    statusKey === "renegotiating" && "bg-blue-400"
+                                  )} />
+                                  {config.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 견적 정보 (있는 경우) */}
+                      {sellerCtx?.quote && (
+                        <div className="mt-1 text-[10px] text-gray-600 truncate">
+                          {sellerCtx.quote.fuel1_price && <span className="text-green-700">{sellerCtx.quote.fuel1_price}</span>}
+                          {sellerCtx.quote.barge_fee && <span className="text-blue-600 ml-1">+{sellerCtx.quote.barge_fee}</span>}
+                        </div>
+                      )}
+
+                      {/* 노오퍼 사유 (있는 경우) */}
+                      {sellerCtx?.no_offer_reason && (
+                        <div className="mt-1 text-[10px] text-red-500 truncate">
+                          {sellerCtx.no_offer_reason}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {/* Scroll indicator when tabs overflow */}
-            {sellerTabs.length > 3 && (
-              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />
-            )}
           </div>
 
-          {sellerTabs.map(trader => (
-            <TabsContent
-              key={trader}
-              value={trader}
-              className="flex-1 m-0 min-h-0 overflow-hidden"
-            >
+          {/* 하단 채팅 영역 (70%) */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {activeSellerTab && (
               <SellerChatRoom
-                trader={trader}
-                messages={sellerMessages.get(trader) || []}
-                inputValue={inputValues[trader] || ''}
-                onInputChange={(value) => setInputValues(prev => ({ ...prev, [trader]: value }))}
-                onSend={() => handleSend(trader)}
+                trader={activeSellerTab}
+                messages={sellerMessages.get(activeSellerTab) || []}
+                inputValue={inputValues[activeSellerTab] || ''}
+                onInputChange={(value) => setInputValues(prev => ({ ...prev, [activeSellerTab]: value }))}
+                onSend={() => handleSend(activeSellerTab)}
+                sellerContext={session?.seller_contexts?.[activeSellerTab]}
+                dealStage={(session?.stage as DealStage) || "quote_collecting"}
+                fuelCount={session?.fuel_type2 ? 2 : 1}
+                onFieldUpdate={(field, value) => {
+                  updateSellerContext(activeSellerTab, field, value);
+                }}
               />
-            </TabsContent>
-          ))}
-        </Tabs>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1321,16 +1533,34 @@ const SellerChatRoom = memo(({
   messages,
   inputValue,
   onInputChange,
-  onSend
+  onSend,
+  sellerContext,
+  dealStage,
+  fuelCount,
+  onFieldUpdate
 }: {
   trader: string;
   messages: ChatMessage[];
   inputValue: string;
   onInputChange: (value: string) => void;
   onSend: () => void;
+  sellerContext?: SellerContext;
+  dealStage?: DealStage;
+  fuelCount?: number;
+  onFieldUpdate?: (field: string, value: string) => void;
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isFirstLoadRef = useRef(true);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  // 수집 필요 필드 계산
+  const requiredFields = getSellerRequiredFields(
+    dealStage || "quote_collecting",
+    fuelCount || 1,
+    sellerContext
+  );
+  const completion = getFieldCompletionRatio(requiredFields);
 
   // Auto scroll to bottom - instant on first load, smooth on updates
   useEffect(() => {
@@ -1344,8 +1574,207 @@ const SellerChatRoom = memo(({
     }
   }, [messages]);
 
+  const handleFieldEdit = (field: SellerRequiredField) => {
+    setEditingField(field.key);
+    setEditValue(field.value || "");
+  };
+
+  const handleFieldSave = () => {
+    if (editingField && onFieldUpdate) {
+      onFieldUpdate(editingField, editValue);
+    }
+    setEditingField(null);
+    setEditValue("");
+  };
+
   return (
     <div className="flex flex-col h-full">
+      {/* Required Info Panel */}
+      {dealStage && (dealStage === "quote_collecting" || dealStage === "deal_started" || dealStage === "renegotiating") && (
+        <div className="p-2 border-b bg-gradient-to-r from-purple-50 to-blue-50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-purple-700">
+              📋 Required FullContext
+            </span>
+            <span className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full",
+              completion.percentage === 100
+                ? "bg-green-100 text-green-700"
+                : "bg-yellow-100 text-yellow-700"
+            )}>
+              {completion.filled}/{completion.total} ({completion.percentage}%)
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            {requiredFields.map((field) => (
+              <div
+                key={field.key}
+                className={cn(
+                  "flex items-center gap-1 p-1.5 rounded text-[10px]",
+                  field.filled
+                    ? "bg-green-100/50 border border-green-200"
+                    : "bg-white border border-dashed border-gray-300"
+                )}
+              >
+                {field.filled ? (
+                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                ) : (
+                  <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-700 truncate">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                  </div>
+                  {editingField === field.key ? (
+                    <div className="flex gap-1 mt-0.5">
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="flex-1 px-1 py-0.5 text-[10px] border rounded"
+                        placeholder="Enter value..."
+                        autoFocus
+                        onKeyPress={(e) => e.key === "Enter" && handleFieldSave()}
+                      />
+                      <button
+                        onClick={handleFieldSave}
+                        className="px-1 text-[9px] bg-blue-500 text-white rounded"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        "truncate cursor-pointer hover:bg-gray-100 rounded px-0.5",
+                        field.filled ? "text-green-700" : "text-gray-400 italic"
+                      )}
+                      onClick={() => handleFieldEdit(field)}
+                      title={field.value || "Click to enter"}
+                    >
+                      {field.value || "—"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Margin Calculation Panel (+$2) - Only show when quote exists */}
+      {sellerContext?.quote && sellerContext.quote.fuel1_price && (
+        <div className="p-2 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-xs font-semibold text-green-700">
+              💰 Margin Calc (+$2)
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+              Customer Price
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Fuel 1 */}
+            {sellerContext.quote.fuel1_price && (
+              <div className="bg-white rounded-lg p-2 border border-green-200">
+                <div className="text-[10px] text-gray-500 mb-0.5">Fuel 1</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-green-700">
+                    ${(() => {
+                      const price = parseFloat(sellerContext.quote?.fuel1_price || "0");
+                      return isNaN(price) ? "—" : (price + 2).toFixed(0);
+                    })()}
+                  </span>
+                  <span className="text-[9px] text-gray-400">
+                    (cost ${sellerContext.quote.fuel1_price})
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* Fuel 2 */}
+            {sellerContext.quote.fuel2_price && (
+              <div className="bg-white rounded-lg p-2 border border-green-200">
+                <div className="text-[10px] text-gray-500 mb-0.5">Fuel 2</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-green-700">
+                    ${(() => {
+                      const price = parseFloat(sellerContext.quote?.fuel2_price || "0");
+                      return isNaN(price) ? "—" : (price + 2).toFixed(0);
+                    })()}
+                  </span>
+                  <span className="text-[9px] text-gray-400">
+                    (cost ${sellerContext.quote.fuel2_price})
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* Fuel 3 */}
+            {sellerContext.quote.fuel3_price && (
+              <div className="bg-white rounded-lg p-2 border border-green-200">
+                <div className="text-[10px] text-gray-500 mb-0.5">Fuel 3</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-green-700">
+                    ${(() => {
+                      const price = parseFloat(sellerContext.quote?.fuel3_price || "0");
+                      return isNaN(price) ? "—" : (price + 2).toFixed(0);
+                    })()}
+                  </span>
+                  <span className="text-[9px] text-gray-400">
+                    (cost ${sellerContext.quote.fuel3_price})
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* Barge Fee */}
+            {sellerContext.quote.barge_fee && (
+              <div className="bg-white rounded-lg p-2 border border-blue-200">
+                <div className="text-[10px] text-gray-500 mb-0.5">Barge</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-bold text-blue-700">
+                    +${sellerContext.quote.barge_fee}
+                  </span>
+                  <span className="text-[9px] text-gray-400">(no margin)</span>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Customer Message Preview */}
+          <div className="mt-2 p-1.5 bg-white rounded border border-dashed border-gray-300">
+            <div className="text-[10px] text-gray-500 mb-0.5">📨 Customer Message Preview:</div>
+            <div className="text-[11px] font-mono text-gray-800">
+              {(() => {
+                const quote = sellerContext.quote;
+                const price1 = quote?.fuel1_price;
+                const price2 = quote?.fuel2_price;
+                const price3 = quote?.fuel3_price;
+                const barge = quote?.barge_fee;
+
+                let prices: string[] = [];
+                if (price1) prices.push((parseFloat(price1) + 2).toFixed(0));
+                if (price2) prices.push((parseFloat(price2) + 2).toFixed(0));
+                if (price3) prices.push((parseFloat(price3) + 2).toFixed(0));
+
+                let msg = prices.join("/");
+                if (barge) msg += `+${barge}`;
+                return msg || "—";
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Offer Reason Display */}
+      {sellerContext?.no_offer_reason && (
+        <div className="p-2 border-b bg-red-50 text-xs">
+          <div className="flex items-center gap-1 text-red-600">
+            <AlertCircle className="w-3 h-3" />
+            <span className="font-medium">No Offer:</span>
+            <span>{sellerContext.no_offer_reason}</span>
+          </div>
+        </div>
+      )}
+
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-3">
           {messages.map((msg) => (
