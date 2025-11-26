@@ -19,6 +19,7 @@ jobs:
             cd /opt/harold/harold-web
             git fetch origin main
             git reset --hard origin/main
+            rm -rf .next node_modules/.cache
             npm ci
             npm run build
             pm2 restart harold-web || pm2 start npm --name "harold-web" -- start
