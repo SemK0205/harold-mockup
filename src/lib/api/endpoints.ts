@@ -14,7 +14,6 @@ import type {
   RejectAISuggestionResponse,
   SendChatMessageRequest,
   SendChatMessageResponse,
-  AnalyticsData,
   PaginatedResponse,
   RoomInfo,
 } from "@/types";
@@ -108,18 +107,6 @@ export const chatMessagesAPI = {
   // 모든 채팅방 목록 조회
   getAllRooms: async (): Promise<RoomInfo[]> => {
     const response = await apiClient.get("/messages/rooms");
-    return response.data;
-  },
-};
-
-// ============================================
-// Analytics API
-// ============================================
-
-export const analyticsAPI = {
-  // 통계 데이터 조회
-  getAnalytics: async (): Promise<AnalyticsData> => {
-    const response = await apiClient.get("/analytics");
     return response.data;
   },
 };

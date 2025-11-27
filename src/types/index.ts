@@ -254,17 +254,6 @@ export interface DealScoreboardRow {
   created_at: string;
 }
 
-// Analytics Data
-export interface AnalyticsData {
-  total_trades: number;
-  completed_trades: number;
-  total_revenue: number;
-  revenue_by_country: Record<string, number>;
-  revenue_by_port: Record<string, number>;
-  revenue_by_trader: Record<string, number>;
-  trades_by_month: { month: string; count: number; revenue: number }[];
-}
-
 // ============================================
 // Utility Types
 // ============================================
