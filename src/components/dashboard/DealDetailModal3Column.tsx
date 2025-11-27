@@ -1320,6 +1320,14 @@ const SellerChatsColumn = memo(() => {
                 const isActive = activeSellerTab === trader;
                 const sellerCtx = getSellerContext(trader);
 
+                // FullContext 진행률 계산
+                const traderRequiredFields = getSellerRequiredFields(
+                  (session?.stage as DealStage) || "quote_collecting",
+                  session?.fuel_type2 ? 2 : 1,
+                  sellerCtx
+                );
+                const traderCompletion = getFieldCompletionRatio(traderRequiredFields);
+
                 return (
                   <div
                     key={trader}
@@ -1348,8 +1356,21 @@ const SellerChatsColumn = memo(() => {
                             {storeUnreadCounts[trader] > 99 ? '99+' : storeUnreadCounts[trader]}
                           </span>
                         )}
-                        {/* Status dropdown */}
-                        <div className="relative">
+                        {/* FullContext 진행률 + Status dropdown 묶음 */}
+                        <div className="flex items-center gap-1">
+                          {/* FullContext 진행률 - no_offer가 아닐 때만 표시 */}
+                          {status !== "no_offer" && (
+                            <span className={cn(
+                              "text-[9px] px-1 py-0.5 rounded",
+                              traderCompletion.percentage === 100
+                                ? "bg-green-100 text-green-700"
+                                : "bg-orange-100 text-orange-700"
+                            )}>
+                              {traderCompletion.filled}/{traderCompletion.total}
+                            </span>
+                          )}
+                          {/* Status dropdown */}
+                          <div className="relative">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1389,6 +1410,7 @@ const SellerChatsColumn = memo(() => {
                               ))}
                             </div>
                           )}
+                        </div>
                         </div>
                       </div>
 
