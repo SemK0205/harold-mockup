@@ -288,6 +288,23 @@ const BuyerChatColumn = memo(() => {
             direction: msg.direction || (ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' : 'incoming'),
             created_at: msg.created_at
           })));
+
+          // Mark messages as read (구매측)
+          try {
+            const platformToInternal: Record<string, string> = {
+              'com.kakao.talk': 'kakao',
+              'com.kakao.yellowid': 'kakao_biz',
+              'com.whatsapp': 'whatsapp',
+              'com.wechat': 'wechat'
+            };
+            const internalPlatform = platformToInternal[platform] || 'kakao';
+            await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/chats/${encodeURIComponent(session.customer_room_name)}/mark-read?platform=${internalPlatform}`,
+              { method: 'POST' }
+            );
+          } catch (markReadError) {
+            console.error('Failed to mark buyer messages as read:', markReadError);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch buyer messages:', error);
@@ -1210,6 +1227,23 @@ const SellerChatsColumn = memo(() => {
               created_at: msg.created_at
             }));
             setSellerMessagesForTrader(trader, formattedMessages);
+
+            // Mark messages as read (판매측)
+            try {
+              const platformToInternal: Record<string, string> = {
+                'com.kakao.talk': 'kakao',
+                'com.kakao.yellowid': 'kakao_biz',
+                'com.whatsapp': 'whatsapp',
+                'com.wechat': 'wechat'
+              };
+              const internalPlatform = platformToInternal[platform] || 'kakao';
+              await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/chats/${encodeURIComponent(trader)}/mark-read?platform=${internalPlatform}`,
+                { method: 'POST' }
+              );
+            } catch (markReadError) {
+              console.error(`Failed to mark seller messages as read for ${trader}:`, markReadError);
+            }
           }
         } catch (error) {
           console.error(`Failed to fetch messages for ${trader}:`, error);

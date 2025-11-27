@@ -795,6 +795,8 @@ export interface DealScoreboard {
   requested_traders?: string[]; // 요청된 판매자 목록
   seller_contexts?: Record<string, SellerContext>; // 판매자별 컨텍스트
   unread_count?: number; // 읽지 않은 메시지 수 (고객방 + 판매자방 합계)
+  buyer_unread_count?: number; // 선주측(구매측) 읽지 않은 메시지 수
+  seller_unread_count?: number; // 판매측 읽지 않은 메시지 수
 }
 
 export interface DealStatistics {

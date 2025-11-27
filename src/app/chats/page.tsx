@@ -74,12 +74,12 @@ export default function ChatsPage() {
     );
   }) || [];
 
-  // 채팅방 변경 시 검색어 초기화 & 배지 제거 & ref 업데이트
+  // 채팅방 변경 시 검색어 초기화 & 배지 제거 & ref 업데이트 & mark-read 호출
   useEffect(() => {
     setMessageSearchQuery("");
     selectedRoomRef.current = selectedRoom; // ref 업데이트
 
-    // 선택된 채팅방의 배지 제거
+    // 선택된 채팅방의 배지 제거 & mark-read API 호출
     if (selectedRoom) {
       const key = `${selectedRoom.room_name}-${selectedRoom.platform}`;
       setNewMessageBadges((prev) => {
@@ -87,6 +87,27 @@ export default function ChatsPage() {
         delete newBadges[key];
         return newBadges;
       });
+
+      // Mark messages as read
+      const markAsRead = async () => {
+        try {
+          const platformToInternal: Record<string, string> = {
+            'com.kakao.talk': 'kakao',
+            'com.kakao.yellowid': 'kakao_biz',
+            'com.whatsapp': 'whatsapp',
+            'com.wechat': 'wechat'
+          };
+          const internalPlatform = platformToInternal[selectedRoom.platform] || 'kakao';
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:59234";
+          await fetch(
+            `${apiUrl}/chats/${encodeURIComponent(selectedRoom.room_name)}/mark-read?platform=${internalPlatform}`,
+            { method: 'POST' }
+          );
+        } catch (error) {
+          console.error('Failed to mark messages as read:', error);
+        }
+      };
+      markAsRead();
     }
   }, [selectedRoom]);
 

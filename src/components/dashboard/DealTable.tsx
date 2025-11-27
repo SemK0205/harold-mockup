@@ -206,10 +206,18 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
                         NEW
                       </Badge>
                     )}
-                    {(deal.unread_count ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-blue-600" title="Unread messages">
+                    {/* 선주측(구매측) 읽지 않은 메시지 - 배 아이콘 */}
+                    {(deal.buyer_unread_count ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-green-600" title="선주측 읽지 않은 메시지">
+                        <span className="text-sm">🚢</span>
+                        <span className="text-xs font-medium">{deal.buyer_unread_count}</span>
+                      </span>
+                    )}
+                    {/* 판매측 읽지 않은 메시지 - 닻 아이콘 */}
+                    {(deal.seller_unread_count ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-blue-600" title="판매측 읽지 않은 메시지">
                         <span className="text-sm">⚓</span>
-                        <span className="text-xs font-medium">{deal.unread_count}</span>
+                        <span className="text-xs font-medium">{deal.seller_unread_count}</span>
                       </span>
                     )}
                   </div>
