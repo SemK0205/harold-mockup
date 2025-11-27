@@ -548,31 +548,19 @@ const AIAssistantColumn = memo(() => {
     setFullContextCompletion(completion);
   }, [completion, setFullContextCompletion]);
 
-  // Fetch AI suggestions
+  // Fetch AI suggestions - 해당 세션의 제안만 가져옴
   useEffect(() => {
     if (!session) return;
 
     const fetchSuggestions = async () => {
       try {
-        let response = await fetch(
+        const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/session/${session.session_id}`
         );
         if (response.ok) {
           const data = await response.json();
           const sessionSuggestions = Array.isArray(data) ? data : [];
-          if (sessionSuggestions.length > 0) {
-            setAiSuggestions(sessionSuggestions);
-            return;
-          }
-        }
-
-        response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/pending`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const allSuggestions = data.suggestions || [];
-          setAiSuggestions(allSuggestions.slice(0, 10));
+          setAiSuggestions(sessionSuggestions);
         }
       } catch (error) {
         console.error('Failed to fetch AI suggestions:', error);
@@ -1202,12 +1190,18 @@ const SellerChatsColumn = memo(() => {
   };
 
   // Initialize tabs from session and load initial messages
+  // seller_contexts에 있는 판매처만 탭 생성 (실제 메시지를 보낸 판매처)
   useEffect(() => {
-    if (!session?.requested_traders || roomPlatforms.size === 0 || initializedRef.current) return;
+    // seller_contexts가 있으면 그걸 사용, 없으면 requested_traders 사용
+    const tradersToShow = session?.seller_contexts
+      ? Object.keys(session.seller_contexts)
+      : (session?.requested_traders || []);
+
+    if (!tradersToShow.length || roomPlatforms.size === 0 || initializedRef.current) return;
 
     initializedRef.current = true;
 
-    session.requested_traders.forEach(trader => {
+    tradersToShow.forEach(trader => {
       addSellerTab(trader);
 
       const platform = getRoomPlatform(trader);
