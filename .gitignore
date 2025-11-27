@@ -43,4 +43,3 @@ next-env.d.ts
 NUL
 **/NUL
 src/lib/session/
-src/stores/
