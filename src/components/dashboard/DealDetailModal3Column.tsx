@@ -510,8 +510,11 @@ const AIAssistantColumn = memo(() => {
     }
   }, [aiSuggestions, expandedSuggestion]);
 
-  // Full Context 계산 - 세션 데이터 기반
-  const requirements = ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity'];
+  // Full Context 계산 - 세션 데이터 기반 (fuel_type2가 있으면 동적 추가)
+  const baseRequirements = ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity'];
+  const requirements = session?.fuel_type2
+    ? [...baseRequirements, 'fuel_type2', 'quantity2']
+    : baseRequirements;
   const missingFields = requirements.filter(field => {
     if (!session) return true;
     const value = session[field as keyof typeof session];
@@ -525,7 +528,9 @@ const AIAssistantColumn = memo(() => {
     port: 'Please provide the port.',
     delivery_date: 'Please provide the ETA (Estimated Time of Arrival).',
     fuel_type: 'Please provide the fuel type.',
-    quantity: 'Please provide the quantity.'
+    quantity: 'Please provide the quantity.',
+    fuel_type2: 'Please provide the second fuel type.',
+    quantity2: 'Please provide the second fuel quantity.'
   };
 
   // Field labels
@@ -534,7 +539,9 @@ const AIAssistantColumn = memo(() => {
     port: 'Port',
     delivery_date: 'ETA',
     fuel_type: 'Fuel Type',
-    quantity: 'Quantity'
+    quantity: 'Quantity',
+    fuel_type2: 'Fuel Type 2',
+    quantity2: 'Quantity 2'
   };
 
   useEffect(() => {
