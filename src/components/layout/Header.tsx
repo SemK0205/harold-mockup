@@ -12,9 +12,11 @@ export function Header() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: "Deal Dashboard", href: "/dashboard" },
+    { name: "Deal Board", href: "/dashboard" },
     { name: "Chat Manager", href: "/chats" },
-    { name: "Analytics", href: "/analytics" },
+    { name: "Aggregation", href: "/aggregation" },
+    { name: "Statistics", href: "/statistics" },
+    { name: "Settlement", href: "/settlement" },
   ];
 
   return (

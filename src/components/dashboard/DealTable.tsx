@@ -8,6 +8,8 @@
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { DealScoreboard } from "@/types";
+import { useNotificationStore } from "@/stores";
+import { useShallow } from "zustand/react/shallow";
 
 interface DealTableProps {
   deals: DealScoreboard[];
@@ -15,7 +17,7 @@ interface DealTableProps {
   onStatusChange?: (sessionId: string, newStatus: DealScoreboard["status"]) => void;
 }
 
-type SortField = "created_at" | "vessel_name" | "port" | "delivery_date" | "status";
+type SortField = "created_at" | "updated_at" | "vessel_name" | "port" | "delivery_date" | "status";
 type SortDirection = "asc" | "desc";
 
 // Status 설정
@@ -32,6 +34,30 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
+
+  // 알림 스토어에서 New 뱃지 관련 상태와 함수 가져오기
+  const { viewedDeals, knownDealIds, viewedVersion, markAsViewed } = useNotificationStore(
+    useShallow((state) => ({
+      viewedDeals: state.viewedDeals,
+      knownDealIds: state.knownDealIds,
+      viewedVersion: state.viewedVersion,
+      markAsViewed: state.markAsViewed,
+    }))
+  );
+
+  // NEW 뱃지 표시 여부 (knownDealIds에 있으면서 viewedDeals에 없으면 NEW)
+  // viewedVersion을 의존성에 넣어 리렌더링 트리거
+  const isNewDeal = useMemo(() => {
+    return (sessionId: string) => {
+      return knownDealIds.has(sessionId) && !viewedDeals.has(sessionId);
+    };
+  }, [knownDealIds, viewedDeals, viewedVersion]);
+
+  // 딜 클릭 핸들러 (New 뱃지 제거 + 기존 onDealClick 실행)
+  const handleDealClick = (deal: DealScoreboard) => {
+    markAsViewed(deal.session_id);
+    onDealClick(deal);
+  };
 
   // 정렬 핸들러
   const handleSort = (field: SortField) => {
@@ -146,12 +172,20 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
                   Created <SortIcon field="created_at" />
                 </button>
               </th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                <button
+                  onClick={() => handleSort("updated_at")}
+                  className="flex items-center gap-1 hover:text-blue-600"
+                >
+                  Updated <SortIcon field="updated_at" />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
             {sortedDeals.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
                   No deals found
                 </td>
               </tr>
@@ -160,13 +194,24 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
             {sortedDeals.map((deal) => (
               <tr
                 key={deal.id}
-                onClick={() => onDealClick(deal)}
+                onClick={() => handleDealClick(deal)}
                 className={`border-b cursor-pointer transition-colors ${getStatusRowClass(deal.status)}`}
               >
                 {/* 선박명 */}
                 <td className="px-4 py-3">
-                  <div className="font-medium text-gray-900">
+                  <div className="font-medium text-gray-900 flex items-center gap-2">
                     {deal.vessel_name || "-"}
+                    {isNewDeal(deal.session_id) && (
+                      <Badge className="bg-red-500 text-white text-[10px] px-1.5 py-0">
+                        NEW
+                      </Badge>
+                    )}
+                    {(deal.unread_count ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-blue-600" title="Unread messages">
+                        <span className="text-sm">⚓</span>
+                        <span className="text-xs font-medium">{deal.unread_count}</span>
+                      </span>
+                    )}
                   </div>
                 </td>
 
@@ -266,14 +311,15 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
                   </div>
                 </td>
 
-                {/* 생성일시 */}
+                {/* Created */}
                 <td className="px-4 py-3">
                   <div className="text-xs text-gray-500">
-                    {new Date(deal.created_at).toLocaleString("ko-KR", {
+                    {new Date(deal.created_at).toLocaleString("en-US", {
                       month: "2-digit",
                       day: "2-digit",
                       hour: "2-digit",
                       minute: "2-digit",
+                      hour12: true,
                     })}
                   </div>
                   {deal.duration_minutes > 0 && (
@@ -281,6 +327,19 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
                       {Math.floor(deal.duration_minutes / 60)}h {Math.floor(deal.duration_minutes % 60)}m
                     </div>
                   )}
+                </td>
+
+                {/* Updated */}
+                <td className="px-4 py-3">
+                  <div className="text-xs text-gray-500">
+                    {deal.updated_at ? new Date(deal.updated_at).toLocaleString("en-US", {
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    }) : "-"}
+                  </div>
                 </td>
               </tr>
             ))}

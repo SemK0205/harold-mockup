@@ -792,6 +792,7 @@ export interface DealScoreboard {
   status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_failed" | "cancelled";
   stage?: DealStage; // 새로운 딜 단계
   created_at: string;
+  updated_at: string | null;
   closed_at: string | null;
   final_price: number | null;
   selected_trader: string | null;
@@ -804,6 +805,7 @@ export interface DealScoreboard {
   last_quote_time: string | null;
   requested_traders?: string[]; // 요청된 판매자 목록
   seller_contexts?: Record<string, SellerContext>; // 판매자별 컨텍스트
+  unread_count?: number; // 읽지 않은 메시지 수 (고객방 + 판매자방 합계)
 }
 
 export interface DealStatistics {

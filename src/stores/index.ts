@@ -22,6 +22,8 @@ export { default as useUIStore } from './useUIStore'
 
 export { default as useDealStore } from './useDealStore'
 
+export { default as useNotificationStore } from './useNotificationStore'
+
 // 스토어 초기화 헬퍼
 export const initializeStores = async () => {
   // 필요한 경우 여기서 스토어 초기 데이터를 설정

@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DealTable } from "@/components/dashboard/DealTable";
 import { DealStatistics } from "@/components/dashboard/DealStatistics";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DealScoreboard as DealScoreboardType, TradingSession } from "@/types";
 import { useDealsSSE } from "@/hooks/useDealsSSE";
+import { useNotificationStore } from "@/stores";
 
 export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<"table" | "timeline" | "statistics">("table");
@@ -33,6 +34,15 @@ export default function DashboardPage() {
     status: statusFilter || undefined,
     customer: customerFilter || undefined,
   });
+
+  // 알림 권한 상태 (클라이언트에서만 렌더링)
+  const [isMounted, setIsMounted] = useState(false);
+  const { notificationPermission, requestNotificationPermission } = useNotificationStore();
+
+  // 클라이언트 마운트 확인
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 통계 데이터 조회
   const { data: statisticsData, isLoading: statisticsLoading } = useQuery({
@@ -118,6 +128,25 @@ export default function DashboardPage() {
                 {isConnected ? "Live" : "Connecting..."}
               </span>
             </div>
+
+            {/* 브라우저 알림 권한 버튼 (클라이언트에서만 렌더링) */}
+            {isMounted && notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={requestNotificationPermission}
+                className="flex items-center gap-1.5"
+              >
+                <span>🔔</span>
+                <span>Enable Notifications</span>
+              </Button>
+            )}
+            {isMounted && notificationPermission === 'granted' && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-xs text-green-700">
+                <span>🔔</span>
+                <span>Notifications On</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

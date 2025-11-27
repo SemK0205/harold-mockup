@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { DealScoreboard } from "@/types";
-import { useDealStore } from "@/stores";
+import { useDealStore, useNotificationStore } from "@/stores";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:59234";
 
@@ -32,6 +32,31 @@ function syncSellerContextsToStore(deals: DealScoreboard[]) {
       store.setSellerContexts(deal.session_id, deal.seller_contexts);
     }
   });
+}
+
+// 새로운 딜 감지 및 알림 처리
+function handleNewDeals(deals: DealScoreboard[], isInitialData: boolean) {
+  const notificationStore = useNotificationStore.getState();
+
+  if (isInitialData) {
+    // 초기 데이터: 현재 모든 딜을 알려진 딜로 설정
+    notificationStore.setKnownDeals(deals.map(d => d.session_id));
+  } else {
+    // 업데이트: 새로운 딜인지 확인하고 알림 발송
+    deals.forEach((deal) => {
+      const isNew = notificationStore.addKnownDeal(deal.session_id);
+      if (isNew) {
+        // 브라우저 알림 발송
+        notificationStore.showNotification(
+          "New Deal Request",
+          {
+            body: `${deal.vessel_name || "Unknown Vessel"} - ${deal.port || "Unknown Port"}`,
+            tag: `deal-${deal.session_id}`,
+          }
+        );
+      }
+    });
+  }
 }
 
 export function useDealsSSE(options: UseDealsSSEOptions = {}): UseDealsSSEReturn {
@@ -79,6 +104,9 @@ export function useDealsSSE(options: UseDealsSSEOptions = {}): UseDealsSSEReturn
 
         // seller_contexts를 전역 store에 동기화
         syncSellerContextsToStore(dealsList);
+
+        // 초기 딜 목록 설정 (New 뱃지용)
+        handleNewDeals(dealsList, true);
       } catch (e) {
         console.error("Failed to parse initial_data:", e);
       }
@@ -92,6 +120,9 @@ export function useDealsSSE(options: UseDealsSSEOptions = {}): UseDealsSSEReturn
 
         // seller_contexts를 전역 store에 동기화
         syncSellerContextsToStore(dealsList);
+
+        // 새로운 딜 감지 및 브라우저 알림
+        handleNewDeals(dealsList, false);
       } catch (e) {
         console.error("Failed to parse deal_update:", e);
       }
