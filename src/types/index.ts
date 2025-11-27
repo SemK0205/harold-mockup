@@ -417,12 +417,12 @@ export function getSellerRequiredFields(
       value: quote?.barge_fee
     });
 
-    // Earliest Available (최단 공급 가능일)
+    // Earliest Available (최단 공급 가능일) - 필수
     fields.push({
       key: "earliest",
       label: "Earliest",
       label_ko: "얼리",
-      required: false,
+      required: true,
       filled: !!sellerContext?.earliest,
       value: sellerContext?.earliest || undefined
     });
@@ -459,9 +459,9 @@ export function getSellerRequiredFields(
     });
     fields.push({
       key: "earliest",
-      label: "Earliest Available",
-      label_ko: "최단 공급 가능일",
-      required: false,
+      label: "Earliest",
+      label_ko: "얼리",
+      required: true,
       filled: !!sellerContext?.earliest,
       value: sellerContext?.earliest || undefined
     });
