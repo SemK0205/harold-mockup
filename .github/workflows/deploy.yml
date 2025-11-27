@@ -20,6 +20,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             rm -rf .next node_modules/.cache
+            grep -q "NEXT_PUBLIC_API_URL" .env.production.local || echo "NEXT_PUBLIC_API_URL=https://api.harold.seanergyp.com" >> .env.production.local
             npm ci
             npm run build
             pm2 restart harold-web || pm2 start npm --name "harold-web" -- start

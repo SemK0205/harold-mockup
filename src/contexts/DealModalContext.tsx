@@ -75,9 +75,11 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
   // Sync session state when initialSession prop changes (fixes issue where all inquiries show the same data)
   useEffect(() => {
     setSession(initialSession);
-    // Reset related states when session changes
+    // Reset UI states when session changes
+    // 메시지는 전역 store에서 캐시되므로 초기화하지 않음
+    // sellerMessages는 store에서 로드할 예정이지만, 로컬 상태도 유지
     setBuyerMessages([]);
-    setSellerMessages(new Map());
+    // setSellerMessages(new Map()); // 더 이상 초기화하지 않음 - 캐시 유지
     setSellerTabs([]);
     setActiveSellerTab(null);
     setAiSuggestions([]);

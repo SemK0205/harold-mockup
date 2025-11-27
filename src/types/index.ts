@@ -360,8 +360,19 @@ export function getSellerRequiredFields(
   const fields: SellerRequiredField[] = [];
   const quote = sellerContext?.quote;
 
-  // 오퍼가격취합 단계에서 필요한 필드
-  if (stage === "quote_collecting" || stage === "deal_started") {
+  // 셀러 개별 상태 확인
+  const sellerStatus = sellerContext?.status;
+
+  // waiting_quote, quote_received → 가격 수집 필요
+  // renegotiating → 재협상 필드 필요
+  // no_offer → 필드 없음
+  const needsQuoteCollection = sellerStatus === "waiting_quote" || sellerStatus === "quote_received";
+  const isRenegotiating = sellerStatus === "renegotiating";
+  const isNoOffer = sellerStatus === "no_offer";
+
+  // 오퍼가격취합: waiting_quote, quote_received 상태이거나 딜 단계가 quote_collecting/deal_started일 때
+  // 단, no_offer 상태면 제외
+  if (!isNoOffer && !isRenegotiating && (needsQuoteCollection || stage === "quote_collecting" || stage === "deal_started")) {
     // Fuel1 Price (항상 필요)
     fields.push({
       key: "fuel1_price",
@@ -405,10 +416,20 @@ export function getSellerRequiredFields(
       filled: !!quote?.barge_fee,
       value: quote?.barge_fee
     });
+
+    // Earliest Available (최단 공급 가능일)
+    fields.push({
+      key: "earliest",
+      label: "Earliest",
+      label_ko: "얼리",
+      required: false,
+      filled: !!sellerContext?.earliest,
+      value: sellerContext?.earliest || undefined
+    });
   }
 
   // 재협상 단계에서 추가 필드
-  if (stage === "renegotiating") {
+  if (isRenegotiating) {
     // 가격 필드도 포함 (재협상이므로)
     fields.push({
       key: "fuel1_price",

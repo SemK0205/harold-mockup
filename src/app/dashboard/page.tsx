@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [portFilter, setPortFilter] = useState<string>("");
   const [customerFilter, setCustomerFilter] = useState<string>("");
-  const [selectedDeal, setSelectedDeal] = useState<DealScoreboardType | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // SSE 연결
@@ -43,8 +43,13 @@ export default function DashboardPage() {
 
   const deals = sseDeals;
 
+  // selectedDealId로 최신 deals에서 실제 deal 찾기
+  const selectedDeal = selectedDealId
+    ? deals.find(d => d.session_id === selectedDealId) || null
+    : null;
+
   const handleDealClick = (deal: DealScoreboardType) => {
-    setSelectedDeal(deal);
+    setSelectedDealId(deal.session_id);
     setIsModalOpen(true);
   };
 

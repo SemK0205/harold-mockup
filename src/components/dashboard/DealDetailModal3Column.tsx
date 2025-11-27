@@ -32,6 +32,7 @@ import { getSellerRequiredFields, getFieldCompletionRatio, DEAL_STAGE_LABELS_KO 
 import { DealModalProvider, useDealModal } from "@/contexts/DealModalContext";
 import { useSSEManager } from "@/hooks/useSSEManager";
 import SSEConnectionManager from "@/lib/sse/SSEConnectionManager";
+import { useDealStore } from "@/stores";
 
 interface DealDetailModalProps {
   session: TradingSession | null;
@@ -1060,39 +1061,49 @@ const SellerChatsColumn = memo(() => {
     roomPlatforms
   } = useDealModal();
 
-  // 로컬 seller_contexts 상태 (UI 즉시 반영용)
-  const [localSellerContexts, setLocalSellerContexts] = useState<Record<string, SellerContext>>({});
+  // 전역 store에서 seller_contexts 가져오기
+  const sessionId = session?.session_id || '';
 
-  // session.seller_contexts가 변경되면 로컬 상태 동기화
-  useEffect(() => {
-    if (session?.seller_contexts) {
-      setLocalSellerContexts(session.seller_contexts);
-    }
-  }, [session?.seller_contexts]);
+  // store에서 전체 Map을 가져온 후 외부에서 sessionId로 접근
+  const sellerContextsMap = useDealStore((state) => state.sellerContextsBySession);
+  const unreadCountsMap = useDealStore((state) => state.unreadCountsBySession);
+  const updateStoreSellerContext = useDealStore((state) => state.updateSellerContext);
+  const clearUnread = useDealStore((state) => state.clearUnread);
 
-  // 판매자 상태 가져오기 (로컬 상태 우선)
+  // sessionId로 해당 세션의 데이터 접근
+  const storeSellerContexts = sessionId ? sellerContextsMap.get(sessionId) : undefined;
+  const storeUnreadCounts = sessionId ? (unreadCountsMap.get(sessionId) || {}) : {};
+
+  // 판매자 상태 가져오기 (store 우선, 없으면 session)
   const getSellerStatus = (trader: string): SellerStatus => {
-    return localSellerContexts[trader]?.status || session?.seller_contexts?.[trader]?.status || "waiting_quote";
+    return storeSellerContexts?.[trader]?.status || session?.seller_contexts?.[trader]?.status || "waiting_quote";
   };
 
   // 현재 seller context 가져오기
   const getSellerContext = (trader: string): SellerContext | undefined => {
-    return localSellerContexts[trader] || session?.seller_contexts?.[trader];
+    return storeSellerContexts?.[trader] || session?.seller_contexts?.[trader];
   };
 
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const initializedRef = useRef(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
 
-  // Unread message counts per trader
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  // activeSellerTab과 sessionId를 ref로 추적 (SSE 콜백에서 최신 값 참조)
+  const activeTabRef = useRef(activeSellerTab);
+  const sessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    activeTabRef.current = activeSellerTab;
+  }, [activeSellerTab]);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // Clear unread count when tab becomes active
   useEffect(() => {
-    if (activeSellerTab && unreadCounts[activeSellerTab] > 0) {
-      setUnreadCounts(prev => ({ ...prev, [activeSellerTab]: 0 }));
+    if (activeSellerTab && sessionId && storeUnreadCounts[activeSellerTab] > 0) {
+      clearUnread(sessionId, activeSellerTab);
     }
-  }, [activeSellerTab]);
+  }, [activeSellerTab, sessionId, storeUnreadCounts, clearUnread]);
 
   // seller_contexts 업데이트 API 호출
   const updateSellerContext = async (
@@ -1139,25 +1150,25 @@ const SellerChatsColumn = memo(() => {
 
       if (response.ok) {
         console.log(`seller_context 업데이트 성공: ${trader}.${field} = ${value}`);
-        // 로컬 상태 즉시 업데이트
-        setLocalSellerContexts(prev => {
-          const current = prev[trader] || { status: 'waiting_quote' as SellerStatus, quote: null };
-          const updated = { ...current };
+        // 전역 store 즉시 업데이트
+        const current = storeSellerContexts?.[trader] || session?.seller_contexts?.[trader] || { status: 'waiting_quote' as SellerStatus, quote: null };
+        const updated = { ...current };
 
-          if (field === 'status') {
-            updated.status = value as SellerStatus;
-          } else if (field.includes('price') || field === 'barge_fee') {
-            updated.quote = { ...(updated.quote || {}), [field]: value };
-            if (value) updated.status = 'quote_received';
-          } else if (field === 'earliest') {
-            updated.earliest = value;
-          } else if (field === 'no_offer_reason') {
-            updated.no_offer_reason = value;
-            updated.status = 'no_offer';
-          }
+        if (field === 'status') {
+          updated.status = value as SellerStatus;
+        } else if (field.includes('price') || field === 'barge_fee') {
+          updated.quote = { ...(updated.quote || {}), [field]: value };
+          if (value) updated.status = 'quote_received';
+        } else if (field === 'earliest') {
+          updated.earliest = value;
+        } else if (field === 'no_offer_reason') {
+          updated.no_offer_reason = value;
+          updated.status = 'no_offer';
+        }
 
-          return { ...prev, [trader]: updated };
-        });
+        if (sessionId) {
+          updateStoreSellerContext(sessionId, trader, updated);
+        }
       } else {
         console.error('seller_context 업데이트 실패:', await response.text());
       }
@@ -1221,11 +1232,9 @@ const SellerChatsColumn = memo(() => {
       const unsubscribe = manager.subscribe(trader, (message) => {
         addSellerMessage(trader, message);
         // Increment unread count if this tab is not active and message is incoming
-        if (trader !== activeSellerTab && message.direction !== 'outgoing') {
-          setUnreadCounts(prev => ({
-            ...prev,
-            [trader]: (prev[trader] || 0) + 1
-          }));
+        // ref 사용하여 closure 문제 해결
+        if (trader !== activeTabRef.current && message.direction !== 'outgoing' && sessionIdRef.current) {
+          useDealStore.getState().incrementUnread(sessionIdRef.current, trader);
         }
       });
       unsubscribes.push(unsubscribe);
@@ -1234,7 +1243,7 @@ const SellerChatsColumn = memo(() => {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [sellerTabs, session, addSellerMessage, activeSellerTab]);
+  }, [sellerTabs, session, addSellerMessage]);
 
   const handleSend = async (trader: string) => {
     const inputValue = inputValues[trader] || '';
@@ -1334,9 +1343,9 @@ const SellerChatsColumn = memo(() => {
                           {trader.length > 10 ? `${trader.slice(0, 10)}..` : trader}
                         </span>
                         {/* Unread message badge */}
-                        {unreadCounts[trader] > 0 && (
+                        {storeUnreadCounts[trader] > 0 && (
                           <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-red-500 text-white rounded-full animate-pulse min-w-[18px] text-center">
-                            {unreadCounts[trader] > 99 ? '99+' : unreadCounts[trader]}
+                            {storeUnreadCounts[trader] > 99 ? '99+' : storeUnreadCounts[trader]}
                           </span>
                         )}
                         {/* Status dropdown */}
@@ -1408,12 +1417,13 @@ const SellerChatsColumn = memo(() => {
           <div className="flex-1 min-h-0 overflow-hidden">
             {activeSellerTab && (
               <SellerChatRoom
+                key={`${activeSellerTab}-${getSellerContext(activeSellerTab)?.status || 'unknown'}`}
                 trader={activeSellerTab}
                 messages={sellerMessages.get(activeSellerTab) || []}
                 inputValue={inputValues[activeSellerTab] || ''}
                 onInputChange={(value) => setInputValues(prev => ({ ...prev, [activeSellerTab]: value }))}
                 onSend={() => handleSend(activeSellerTab)}
-                sellerContext={session?.seller_contexts?.[activeSellerTab]}
+                sellerContext={getSellerContext(activeSellerTab)}
                 dealStage={(session?.stage as DealStage) || "quote_collecting"}
                 fuelCount={session?.fuel_type2 ? 2 : 1}
                 onFieldUpdate={(field, value) => {
@@ -1589,8 +1599,8 @@ const SellerChatRoom = memo(({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Required Info Panel */}
-      {dealStage && (dealStage === "quote_collecting" || dealStage === "deal_started" || dealStage === "renegotiating") && (
+      {/* Required Info Panel - waiting_quote, quote_received, renegotiating 상태에서 표시 (no_offer 제외) */}
+      {sellerContext?.status !== "no_offer" && (sellerContext?.status === "waiting_quote" || sellerContext?.status === "quote_received" || sellerContext?.status === "renegotiating" || dealStage === "quote_collecting" || dealStage === "deal_started") && (
         <div className="p-2 border-b bg-gradient-to-r from-purple-50 to-blue-50">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-purple-700">
