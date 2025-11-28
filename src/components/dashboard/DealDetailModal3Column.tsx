@@ -429,22 +429,47 @@ BuyerChatColumn.displayName = 'BuyerChatColumn';
 const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | null }) => {
   const { addBuyerMessage, getRoomPlatform } = useDealModal();
 
-  // 필드별 질문 메시지 (Buyer 측 - 인쿼리 단계)
-  const fieldQuestions: Record<string, string> = {
-    vessel: '배 이름이 어떻게 되나요?',
-    port: '포트가 어떻게 되나요?',
-    eta: 'ETA가 어떻게 되나요?',
-    fuel1: '유종이 어떻게 되나요?',
-    qty1: '수량은 어떻게 되나요?',
-    fuel2: '두번째 유종이 어떻게 되나요?',
-    qty2: '두번째 유종 수량은 어떻게 되나요?'
+  // 필드별 질문 메시지 생성 (Buyer 측 - 인쿼리 단계)
+  // TODO: session에서 customer language 정보를 가져와서 언어 결정 (현재는 한국어 기본)
+  const getFieldQuestion = (fieldKey: string, lang: 'ko' | 'en' = 'ko'): string => {
+    const questions: Record<string, Record<string, string>> = {
+      vessel: { ko: '배 이름이 어떻게 되나요?', en: 'What is the vessel name?' },
+      port: { ko: '포트가 어떻게 되나요?', en: 'What is the port?' },
+      eta: { ko: 'ETA가 어떻게 되나요?', en: 'What is the ETA?' },
+      fuel1: { ko: '유종이 어떻게 되나요?', en: 'What is the fuel type?' },
+      fuel2: { ko: '두번째 유종이 어떻게 되나요?', en: 'What is the second fuel type?' }
+    };
+
+    // 수량 질문은 해당 유종명을 포함
+    if (fieldKey === 'qty1') {
+      if (lang === 'en') {
+        return session?.fuel_type
+          ? `What is the quantity for ${session.fuel_type}?`
+          : 'What is the quantity?';
+      }
+      return session?.fuel_type
+        ? `${session.fuel_type} 수량은 어떻게 되나요?`
+        : '수량은 어떻게 되나요?';
+    }
+    if (fieldKey === 'qty2') {
+      if (lang === 'en') {
+        return session?.fuel_type2
+          ? `What is the quantity for ${session.fuel_type2}?`
+          : 'What is the second fuel quantity?';
+      }
+      return session?.fuel_type2
+        ? `${session.fuel_type2} 수량은 어떻게 되나요?`
+        : '두번째 유종 수량은 어떻게 되나요?';
+    }
+
+    return questions[fieldKey]?.[lang] || questions[fieldKey]?.['ko'] || '';
   };
 
   // 빈 필드 클릭 시 질문 전송
   const handleMissingFieldClick = async (fieldKey: string) => {
     if (!session) return;
 
-    const question = fieldQuestions[fieldKey];
+    const question = getFieldQuestion(fieldKey);
     if (!question) return;
 
     const platform = getRoomPlatform(session.customer_room_name);
@@ -527,7 +552,7 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
               <div
                 key={field.key}
                 onClick={() => !field.filled && handleMissingFieldClick(field.key)}
-                title={!field.filled ? `Click to ask: "${fieldQuestions[field.key]}"` : ''}
+                title={!field.filled ? `Click to ask: "${getFieldQuestion(field.key)}"` : ''}
                 className={cn(
                   "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
                   field.filled
@@ -1761,17 +1786,30 @@ const SellerChatRoom = memo(({
   const [editValue, setEditValue] = useState("");
 
   // 판매측 필드별 질문 메시지 (오퍼가격 취합 단계)
+  // TODO: trader 정보에서 language 가져와서 언어 결정 (현재는 한국어 기본)
+  const getSellerFieldQuestion = (fieldKey: string, lang: 'ko' | 'en' = 'ko'): string => {
+    const questions: Record<string, Record<string, string>> = {
+      fuel1_price: { ko: '가격이 어떻게 되나요?', en: 'What is the price?' },
+      fuel2_price: { ko: '두번째 유종 가격이 어떻게 되나요?', en: 'What is the price for the second fuel?' },
+      fuel3_price: { ko: '세번째 유종 가격이 어떻게 되나요?', en: 'What is the price for the third fuel?' },
+      barge_fee: { ko: '바지피가 어떻게 되나요?', en: 'What is the barge fee?' },
+      earliest: { ko: '얼리 언제인가요?', en: 'When is the earliest?' }
+    };
+    return questions[fieldKey]?.[lang] || questions[fieldKey]?.['ko'] || '';
+  };
+
+  // 하위 호환을 위한 객체 (툴팁 등에서 사용)
   const sellerFieldQuestions: Record<string, string> = {
-    fuel1_price: '가격이 어떻게 되나요?',
-    fuel2_price: '두번째 유종 가격이 어떻게 되나요?',
-    fuel3_price: '세번째 유종 가격이 어떻게 되나요?',
-    barge_fee: '바지피가 어떻게 되나요?',
-    earliest: '얼리 언제인가요?'
+    fuel1_price: getSellerFieldQuestion('fuel1_price'),
+    fuel2_price: getSellerFieldQuestion('fuel2_price'),
+    fuel3_price: getSellerFieldQuestion('fuel3_price'),
+    barge_fee: getSellerFieldQuestion('barge_fee'),
+    earliest: getSellerFieldQuestion('earliest')
   };
 
   // 빈 필드 클릭 시 질문 전송
   const handleMissingFieldClick = (fieldKey: string) => {
-    const question = sellerFieldQuestions[fieldKey];
+    const question = getSellerFieldQuestion(fieldKey); // TODO: lang 파라미터 추가
     if (question && onSendQuestion) {
       onSendQuestion(question);
     }
