@@ -429,15 +429,15 @@ BuyerChatColumn.displayName = 'BuyerChatColumn';
 const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | null }) => {
   const { addBuyerMessage, getRoomPlatform } = useDealModal();
 
-  // 필드별 질문 메시지
+  // 필드별 질문 메시지 (Buyer 측 - 인쿼리 단계)
   const fieldQuestions: Record<string, string> = {
-    vessel: 'Please confirm the vessel name.',
-    port: 'Please confirm the port.',
-    eta: 'Please confirm the ETA.',
-    fuel1: 'Please confirm the fuel type.',
-    qty1: 'Please confirm the quantity.',
-    fuel2: 'Please confirm the second fuel type.',
-    qty2: 'Please confirm the second fuel quantity.'
+    vessel: '배 이름이 어떻게 되나요?',
+    port: '포트가 어떻게 되나요?',
+    eta: 'ETA가 어떻게 되나요?',
+    fuel1: '유종이 어떻게 되나요?',
+    qty1: '수량은 어떻게 되나요?',
+    fuel2: '두번째 유종이 어떻게 되나요?',
+    qty2: '두번째 유종 수량은 어떻게 되나요?'
   };
 
   // 빈 필드 클릭 시 질문 전송
@@ -1617,6 +1617,12 @@ const SellerChatsColumn = memo(() => {
                 onFieldUpdate={(field, value) => {
                   updateSellerContext(activeSellerTab, field, value);
                 }}
+                onSendQuestion={(question) => {
+                  // 입력창에 질문 설정 후 전송
+                  setInputValues(prev => ({ ...prev, [activeSellerTab]: question }));
+                  // 약간의 지연 후 전송 (상태 업데이트 대기)
+                  setTimeout(() => handleSend(activeSellerTab), 100);
+                }}
               />
             )}
           </div>
@@ -1735,7 +1741,8 @@ const SellerChatRoom = memo(({
   sellerContext,
   dealStage,
   fuelCount,
-  onFieldUpdate
+  onFieldUpdate,
+  onSendQuestion
 }: {
   trader: string;
   messages: ChatMessage[];
@@ -1746,11 +1753,29 @@ const SellerChatRoom = memo(({
   dealStage?: DealStage;
   fuelCount?: number;
   onFieldUpdate?: (field: string, value: string) => void;
+  onSendQuestion?: (question: string) => void;
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isFirstLoadRef = useRef(true);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // 판매측 필드별 질문 메시지 (오퍼가격 취합 단계)
+  const sellerFieldQuestions: Record<string, string> = {
+    fuel1_price: '가격이 어떻게 되나요?',
+    fuel2_price: '두번째 유종 가격이 어떻게 되나요?',
+    fuel3_price: '세번째 유종 가격이 어떻게 되나요?',
+    barge_fee: '바지피가 어떻게 되나요?',
+    earliest: '얼리 언제인가요?'
+  };
+
+  // 빈 필드 클릭 시 질문 전송
+  const handleMissingFieldClick = (fieldKey: string) => {
+    const question = sellerFieldQuestions[fieldKey];
+    if (question && onSendQuestion) {
+      onSendQuestion(question);
+    }
+  };
 
   // 수집 필요 필드 계산
   const requiredFields = getSellerRequiredFields(
@@ -1807,11 +1832,13 @@ const SellerChatRoom = memo(({
             {requiredFields.map((field) => (
               <div
                 key={field.key}
+                onClick={() => !field.filled && handleMissingFieldClick(field.key)}
+                title={!field.filled && sellerFieldQuestions[field.key] ? `클릭하여 질문: "${sellerFieldQuestions[field.key]}"` : ''}
                 className={cn(
                   "flex items-center gap-1 p-1.5 rounded text-[10px]",
                   field.filled
                     ? "bg-green-100/50 border border-green-200"
-                    : "bg-white border border-dashed border-gray-300"
+                    : "bg-white border border-dashed border-gray-300 cursor-pointer hover:bg-red-50 hover:border-red-300"
                 )}
               >
                 {field.filled ? (
@@ -1825,7 +1852,7 @@ const SellerChatRoom = memo(({
                     {field.required && <span className="text-red-500 ml-0.5">*</span>}
                   </div>
                   {editingField === field.key ? (
-                    <div className="flex gap-1 mt-0.5">
+                    <div className="flex gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="text"
                         value={editValue}
@@ -1845,11 +1872,11 @@ const SellerChatRoom = memo(({
                   ) : (
                     <div
                       className={cn(
-                        "truncate cursor-pointer hover:bg-gray-100 rounded px-0.5",
-                        field.filled ? "text-green-700" : "text-gray-400 italic"
+                        "truncate rounded px-0.5",
+                        field.filled ? "text-green-700 cursor-pointer hover:bg-gray-100" : "text-gray-400 italic"
                       )}
-                      onClick={() => handleFieldEdit(field)}
-                      title={field.value || "Click to enter"}
+                      onClick={(e) => { if (field.filled) { e.stopPropagation(); handleFieldEdit(field); } }}
+                      title={field.filled ? (field.value || "Click to edit") : undefined}
                     >
                       {field.value || "—"}
                     </div>
