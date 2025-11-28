@@ -394,6 +394,9 @@ const BuyerChatColumn = memo(() => {
         </h3>
       </div>
 
+      {/* Required FullContext for Buyer */}
+      <BuyerRequiredFullContext session={session} />
+
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="space-y-3">
           {buyerMessages.map((msg) => (
@@ -421,6 +424,96 @@ const BuyerChatColumn = memo(() => {
   );
 });
 BuyerChatColumn.displayName = 'BuyerChatColumn';
+
+// Buyer Required FullContext Component
+const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | null }) => {
+  // Buyer 쪽 Full Context 필드 계산
+  const buyerRequirements = ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity'];
+  const allBuyerRequirements = session?.fuel_type2
+    ? [...buyerRequirements, 'fuel_type2', 'quantity2']
+    : buyerRequirements;
+
+  const buyerFieldLabels: Record<string, string> = {
+    vessel_name: 'Vessel',
+    port: 'Port',
+    delivery_date: 'ETA',
+    fuel_type: 'Fuel Type',
+    quantity: 'Quantity',
+    fuel_type2: 'Fuel Type 2',
+    quantity2: 'Quantity 2'
+  };
+
+  const buyerFields = allBuyerRequirements.map(field => {
+    const value = session?.[field as keyof typeof session];
+    return {
+      key: field,
+      label: buyerFieldLabels[field] || field,
+      value: value ? String(value) : null,
+      filled: !!value && value !== '',
+      required: true
+    };
+  });
+
+  const buyerCompletion = {
+    filled: buyerFields.filter(f => f.filled).length,
+    total: buyerFields.length,
+    percentage: Math.round((buyerFields.filter(f => f.filled).length / buyerFields.length) * 100)
+  };
+
+  return (
+    <div className="p-2 border-b bg-gradient-to-r from-purple-50 to-blue-50">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-purple-700">
+          📋 Required FullContext
+        </span>
+        <span className={cn(
+          "text-[10px] px-2 py-0.5 rounded-full",
+          buyerCompletion.percentage === 100
+            ? "bg-green-100 text-green-700"
+            : "bg-yellow-100 text-yellow-700"
+        )}>
+          {buyerCompletion.filled}/{buyerCompletion.total} ({buyerCompletion.percentage}%)
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-1">
+        {buyerFields.map((field) => (
+          <div
+            key={field.key}
+            className={cn(
+              "flex items-center gap-1 p-1.5 rounded text-[10px]",
+              field.filled
+                ? "bg-green-100/50 border border-green-200"
+                : "bg-white border border-dashed border-gray-300"
+            )}
+          >
+            {field.filled ? (
+              <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+            ) : (
+              <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-gray-700 truncate">
+                {field.label}
+                {field.required && !field.filled && <span className="text-red-500 ml-0.5">*</span>}
+              </div>
+              <div
+                className={cn(
+                  "truncate",
+                  field.filled ? "text-green-700" : "text-gray-400 italic"
+                )}
+                title={field.value || "Missing"}
+              >
+                {field.value || "—"}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+BuyerRequiredFullContext.displayName = 'BuyerRequiredFullContext';
+
 
 // AI Assistant Column
 const AIAssistantColumn = memo(() => {
