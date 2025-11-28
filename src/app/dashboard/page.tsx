@@ -11,8 +11,10 @@ import { DealTable } from "@/components/dashboard/DealTable";
 import { DealStatistics } from "@/components/dashboard/DealStatistics";
 import { DealTimeline } from "@/components/dashboard/DealTimeline";
 import { DealDetailModal } from "@/components/dashboard/DealDetailModal3Column";
+import { AddInquiryModal } from "@/components/dashboard/AddInquiryModal";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { dealScoreboardAPI } from "@/lib/api/endpoints";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +29,7 @@ export default function DashboardPage() {
   const [customerFilter, setCustomerFilter] = useState<string>("");
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddInquiryOpen, setIsAddInquiryOpen] = useState(false);
 
   // SSE 연결
   const { deals: sseDeals, isConnected } = useDealsSSE({
@@ -174,6 +177,17 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* 인쿼리 수동 추가 버튼 */}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setIsAddInquiryOpen(true)}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" />
+              인쿼리 추가
+            </Button>
+
             {/* 내보내기 버튼 - 테이블 뷰에서만 표시 (왼쪽) */}
             {viewMode === "table" && (
               <ExportButtons
@@ -297,6 +311,16 @@ export default function DashboardPage() {
         session={convertToSession(selectedDeal)}
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+      />
+
+      {/* 인쿼리 수동 추가 모달 */}
+      <AddInquiryModal
+        open={isAddInquiryOpen}
+        onClose={() => setIsAddInquiryOpen(false)}
+        onSuccess={(sessionId) => {
+          console.log("Manual inquiry created:", sessionId);
+          // SSE가 자동으로 새 인쿼리를 반영하므로 추가 작업 불필요
+        }}
       />
     </MainLayout>
   );
