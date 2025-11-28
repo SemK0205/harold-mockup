@@ -762,65 +762,95 @@ const AIAssistantColumn = memo(() => {
     addBuyerMessage
   } = useDealModal();
 
-  const [showFullContext, setShowFullContext] = useState(true);
+  const [showFullContext, setShowFullContext] = useState(false); // 임시로 숨김 - Seller Quote Matrix로 대체됨
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<string>('');
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  // 트레이더 선택 상태 관리 (suggestionId-optionIndex -> Set of selected target indices)
-  const [selectedTargets, setSelectedTargets] = useState<Map<string, Set<number>>>(new Map());
+  // 트레이더 선택 상태 관리 (suggestionId-optionIndex -> Set of selected room_names)
+  const [selectedTraderRooms, setSelectedTraderRooms] = useState<Map<string, Set<string>>>(new Map());
+  // 전체 트레이더 목록
+  const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
 
   // 선택된 타겟 키 생성 헬퍼
   const getTargetKey = (suggestionId: number, optionIndex: number) => `${suggestionId}-${optionIndex}`;
 
-  // 타겟 선택 초기화 (모든 타겟 선택)
+  // 전체 트레이더 목록 가져오기
+  useEffect(() => {
+    const fetchAllTraders = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/traders/all`);
+        if (response.ok) {
+          const data = await response.json();
+          setAllTraders(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch all traders:', error);
+      }
+    };
+    fetchAllTraders();
+  }, []);
+
+  // 타겟 선택 초기화 (AI 추천 트레이더만 선택)
   const initializeTargets = (suggestionId: number, optionIndex: number, targets: any[]) => {
     const key = getTargetKey(suggestionId, optionIndex);
-    if (!selectedTargets.has(key)) {
-      const allSelected = new Set(targets.map((_, idx) => idx));
-      setSelectedTargets(prev => new Map(prev).set(key, allSelected));
+    if (!selectedTraderRooms.has(key)) {
+      // AI가 추천한 트레이더의 room_name들로 초기화
+      const recommendedRooms = new Set(targets.map((t: any) => typeof t === 'string' ? t : t.room));
+      setSelectedTraderRooms(prev => new Map(prev).set(key, recommendedRooms));
     }
   };
 
-  // 타겟 선택 토글
-  const toggleTarget = (suggestionId: number, optionIndex: number, targetIndex: number) => {
+  // 트레이더 선택 토글 (room_name 기반)
+  const toggleTraderRoom = (suggestionId: number, optionIndex: number, roomName: string) => {
     const key = getTargetKey(suggestionId, optionIndex);
-    setSelectedTargets(prev => {
+    setSelectedTraderRooms(prev => {
       const newMap = new Map(prev);
       const currentSet = new Set(prev.get(key) || []);
-      if (currentSet.has(targetIndex)) {
-        currentSet.delete(targetIndex);
+      if (currentSet.has(roomName)) {
+        currentSet.delete(roomName);
       } else {
-        currentSet.add(targetIndex);
+        currentSet.add(roomName);
       }
       newMap.set(key, currentSet);
       return newMap;
     });
   };
 
-  // 전체 선택
-  const selectAllTargets = (suggestionId: number, optionIndex: number, totalTargets: number) => {
+  // 전체 선택 (전체 트레이더)
+  const selectAllTraders = (suggestionId: number, optionIndex: number) => {
     const key = getTargetKey(suggestionId, optionIndex);
-    const allSelected = new Set(Array.from({ length: totalTargets }, (_, i) => i));
-    setSelectedTargets(prev => new Map(prev).set(key, allSelected));
+    const allRooms = new Set(allTraders.map(t => t.room_name));
+    setSelectedTraderRooms(prev => new Map(prev).set(key, allRooms));
   };
 
   // 전체 해제
-  const deselectAllTargets = (suggestionId: number, optionIndex: number) => {
+  const deselectAllTraders = (suggestionId: number, optionIndex: number) => {
     const key = getTargetKey(suggestionId, optionIndex);
-    setSelectedTargets(prev => new Map(prev).set(key, new Set()));
+    setSelectedTraderRooms(prev => new Map(prev).set(key, new Set()));
   };
 
-  // 선택된 타겟 수 가져오기
-  const getSelectedCount = (suggestionId: number, optionIndex: number) => {
+  // 선택된 트레이더 수 가져오기
+  const getSelectedTraderCount = (suggestionId: number, optionIndex: number) => {
     const key = getTargetKey(suggestionId, optionIndex);
-    return selectedTargets.get(key)?.size || 0;
+    return selectedTraderRooms.get(key)?.size || 0;
   };
 
-  // 타겟이 선택되었는지 확인
-  const isTargetSelected = (suggestionId: number, optionIndex: number, targetIndex: number) => {
+  // 트레이더가 선택되었는지 확인 (room_name 기반)
+  const isTraderSelected = (suggestionId: number, optionIndex: number, roomName: string) => {
     const key = getTargetKey(suggestionId, optionIndex);
-    return selectedTargets.get(key)?.has(targetIndex) || false;
+    return selectedTraderRooms.get(key)?.has(roomName) || false;
+  };
+
+  // AI 추천 트레이더인지 확인
+  const isRecommendedTrader = (targets: any[], roomName: string) => {
+    return targets.some((t: any) => (typeof t === 'string' ? t : t.room) === roomName);
+  };
+
+  // 선택된 트레이더 room_names 가져오기 (승인 시 사용)
+  const getSelectedRoomNames = (suggestionId: number, optionIndex: number): string[] => {
+    const key = getTargetKey(suggestionId, optionIndex);
+    return Array.from(selectedTraderRooms.get(key) || []);
   };
 
   // 첫 번째 제안을 자동으로 확장
@@ -952,9 +982,8 @@ const AIAssistantColumn = memo(() => {
 
       const messageToSend = customMessage || option.message;
 
-      // 선택된 타겟 인덱스 가져오기
-      const key = getTargetKey(suggestion.id, optionIndex);
-      const selectedTargetIndices = selectedTargets.get(key) || new Set(option.targets?.map((_: any, i: number) => i) || []);
+      // 선택된 트레이더 room_names 가져오기 (새로운 로직)
+      const selectedRooms = getSelectedRoomNames(suggestion.id, optionIndex);
 
       // 1. 백엔드에 승인 요청
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/approve?suggestion_id=${suggestion.id}`, {
@@ -967,15 +996,12 @@ const AIAssistantColumn = memo(() => {
       });
 
       // 2. 실제 메시지 전송 (action 타입에 따라)
-      if (option.action === 'send_to_suppliers' && Array.isArray(option.targets)) {
-        // 선택된 트레이더에게만 전송
-        for (let i = 0; i < option.targets.length; i++) {
-          if (!selectedTargetIndices.has(i)) continue; // 선택되지 않은 타겟은 스킵
-
-          const target = option.targets[i];
-          const targetRoom = typeof target === 'string' ? target : target.room;
-          const targetMessage = typeof target === 'string' ? messageToSend : target.message;
-          const platform = getRoomPlatform(targetRoom);
+      if (option.action === 'send_to_suppliers') {
+        // 선택된 트레이더에게만 전송 (전체 트레이더 중 선택된 것)
+        for (const targetRoom of selectedRooms) {
+          // 트레이더 정보 찾기
+          const trader = allTraders.find(t => t.room_name === targetRoom);
+          const platform = trader?.platform || getRoomPlatform(targetRoom);
           const platformToInternal: Record<string, string> = {
             'com.kakao.talk': 'kakao',
             'com.kakao.yellowid': 'kakao_biz',
@@ -988,7 +1014,7 @@ const AIAssistantColumn = memo(() => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               room_name: targetRoom,
-              message: targetMessage,
+              message: messageToSend,
               platform: platformToInternal[platform] || 'kakao'
             })
           });
@@ -1026,12 +1052,13 @@ const AIAssistantColumn = memo(() => {
         });
       } else if (option.action === 'send_multiple' && Array.isArray(option.targets)) {
         // 선택된 대상에게만 각각 다른 메시지 전송
-        for (let i = 0; i < option.targets.length; i++) {
-          if (!selectedTargetIndices.has(i)) continue; // 선택되지 않은 타겟은 스킵
-
-          const target = option.targets[i];
+        for (const target of option.targets) {
           if (typeof target === 'object' && 'room' in target) {
-            const platform = getRoomPlatform(target.room);
+            // 선택된 room인지 확인
+            if (!selectedRooms.includes(target.room)) continue;
+
+            const trader = allTraders.find(t => t.room_name === target.room);
+            const platform = trader?.platform || getRoomPlatform(target.room);
             const platformToInternal: Record<string, string> = {
               'com.kakao.talk': 'kakao',
               'com.kakao.yellowid': 'kakao_biz',
@@ -1053,11 +1080,12 @@ const AIAssistantColumn = memo(() => {
       }
 
       // 3. 목록에서 제거
+      const key = getTargetKey(suggestion.id, optionIndex);
       setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
       setExpandedSuggestion(null);
       setEditingMessage('');
       // 선택 상태도 클리어
-      setSelectedTargets(prev => {
+      setSelectedTraderRooms(prev => {
         const newMap = new Map(prev);
         newMap.delete(key);
         return newMap;
@@ -1113,53 +1141,55 @@ const AIAssistantColumn = memo(() => {
           {/* Seller Quote Comparison Table (Excel-style) */}
           <SellerQuoteComparisonTable />
 
-          {/* Full Context Section */}
-          <div className="bg-white p-3 rounded-lg border">
-            <div
-              className="flex items-center justify-between cursor-pointer"
-              onClick={() => setShowFullContext(!showFullContext)}
-            >
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium">Full Context</div>
-                <Badge variant={completion === 100 ? "default" : "secondary"}>
-                  {completion}%
-                </Badge>
-              </div>
-              {showFullContext ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
-
-            {showFullContext && (
-              <div className="mt-3 space-y-1">
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {requirements.map((field) => {
-                    const isMissing = missingFields.includes(field);
-                    const value = session?.[field as keyof typeof session];
-                    return (
-                      <div
-                        key={field}
-                        className={cn(
-                          "flex items-center gap-2 text-xs p-1 rounded cursor-pointer hover:bg-gray-50",
-                          isMissing && "text-red-600 hover:bg-red-50"
-                        )}
-                        onClick={() => isMissing && handleMissingFieldClick(field)}
-                        title={isMissing ? `Click to ask: "${fieldQuestions[field]}"` : ''}
-                      >
-                        {isMissing ? (
-                          <Circle className="w-3 h-3" />
-                        ) : (
-                          <CheckCircle2 className="w-3 h-3 text-green-600" />
-                        )}
-                        <span className="font-medium">{fieldLabels[field]}:</span>
-                        <span className={isMissing ? 'italic' : ''}>
-                          {isMissing ? 'Click to ask' : String(value)}
-                        </span>
-                      </div>
-                    );
-                  })}
+          {/* Full Context Section - 임시로 숨김 (Seller Quote Matrix로 대체됨) */}
+          {false && (
+            <div className="bg-white p-3 rounded-lg border">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => setShowFullContext(!showFullContext)}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium">Full Context</div>
+                  <Badge variant={completion === 100 ? "default" : "secondary"}>
+                    {completion}%
+                  </Badge>
                 </div>
+                {showFullContext ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </div>
-            )}
-          </div>
+
+              {showFullContext && (
+                <div className="mt-3 space-y-1">
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {requirements.map((field) => {
+                      const isMissing = missingFields.includes(field);
+                      const value = session?.[field as keyof typeof session];
+                      return (
+                        <div
+                          key={field}
+                          className={cn(
+                            "flex items-center gap-2 text-xs p-1 rounded cursor-pointer hover:bg-gray-50",
+                            isMissing && "text-red-600 hover:bg-red-50"
+                          )}
+                          onClick={() => isMissing && handleMissingFieldClick(field)}
+                          title={isMissing ? `Click to ask: "${fieldQuestions[field]}"` : ''}
+                        >
+                          {isMissing ? (
+                            <Circle className="w-3 h-3" />
+                          ) : (
+                            <CheckCircle2 className="w-3 h-3 text-green-600" />
+                          )}
+                          <span className="font-medium">{fieldLabels[field]}:</span>
+                          <span className={isMissing ? 'italic' : ''}>
+                            {isMissing ? 'Click to ask' : String(value)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* AI Suggestions */}
           <div className="space-y-3">
@@ -1239,26 +1269,21 @@ const AIAssistantColumn = memo(() => {
                         ))}
                       </div>
 
-                      {/* 트레이더 선택 UI - Select All/None 및 체크박스 목록 */}
-                      {suggestion.suggestions[selectedOptionIndex]?.targets &&
-                        suggestion.suggestions[selectedOptionIndex].targets.length > 0 && (
+                      {/* 트레이더 선택 UI - 전체 트레이더 목록 (send_to_suppliers 액션일 때만) */}
+                      {suggestion.suggestions[selectedOptionIndex]?.action === 'send_to_suppliers' && allTraders.length > 0 && (
                         <div className="border rounded-lg bg-white">
                           {/* 헤더: Select Recipients + All/None 버튼 */}
                           <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
                             <span className="text-xs font-medium text-gray-700">Select Recipients</span>
                             <div className="flex gap-1">
                               <button
-                                onClick={() => selectAllTargets(
-                                  suggestion.id,
-                                  selectedOptionIndex,
-                                  suggestion.suggestions[selectedOptionIndex].targets.length
-                                )}
+                                onClick={() => selectAllTraders(suggestion.id, selectedOptionIndex)}
                                 className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                               >
                                 All
                               </button>
                               <button
-                                onClick={() => deselectAllTargets(suggestion.id, selectedOptionIndex)}
+                                onClick={() => deselectAllTraders(suggestion.id, selectedOptionIndex)}
                                 className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                               >
                                 None
@@ -1266,19 +1291,22 @@ const AIAssistantColumn = memo(() => {
                             </div>
                           </div>
 
-                          {/* 트레이더 목록 */}
-                          <div className="max-h-32 overflow-y-auto p-2 space-y-1">
-                            {suggestion.suggestions[selectedOptionIndex].targets.map((target: any, tIdx: number) => {
-                              const targetRoom = typeof target === 'string' ? target : target.room;
-                              const isSelected = isTargetSelected(suggestion.id, selectedOptionIndex, tIdx);
+                          {/* 전체 트레이더 목록 */}
+                          <div className="max-h-40 overflow-y-auto p-2 space-y-1">
+                            {allTraders.map((trader) => {
+                              const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
+                              const isRecommended = isRecommendedTrader(
+                                suggestion.suggestions[selectedOptionIndex]?.targets || [],
+                                trader.room_name
+                              );
                               return (
                                 <div
-                                  key={tIdx}
+                                  key={trader.id}
                                   className={cn(
                                     "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
                                     isSelected ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-transparent hover:bg-gray-100"
                                   )}
-                                  onClick={() => toggleTarget(suggestion.id, selectedOptionIndex, tIdx)}
+                                  onClick={() => toggleTraderRoom(suggestion.id, selectedOptionIndex, trader.room_name)}
                                 >
                                   <div className={cn(
                                     "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
@@ -1290,8 +1318,13 @@ const AIAssistantColumn = memo(() => {
                                     "truncate flex-1",
                                     isSelected ? "text-blue-900 font-medium" : "text-gray-700"
                                   )}>
-                                    {targetRoom}
+                                    {trader.room_name}
                                   </span>
+                                  {isRecommended && (
+                                    <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-700 border-green-200">
+                                      추천
+                                    </Badge>
+                                  )}
                                 </div>
                               );
                             })}
@@ -1299,7 +1332,7 @@ const AIAssistantColumn = memo(() => {
 
                           {/* 선택 카운터 */}
                           <div className="px-3 py-2 border-t bg-gray-50 text-xs text-gray-600">
-                            {getSelectedCount(suggestion.id, selectedOptionIndex)} of {suggestion.suggestions[selectedOptionIndex].targets.length} selected
+                            {getSelectedTraderCount(suggestion.id, selectedOptionIndex)} of {allTraders.length} selected
                           </div>
                         </div>
                       )}
