@@ -426,86 +426,65 @@ const BuyerChatColumn = memo(() => {
 BuyerChatColumn.displayName = 'BuyerChatColumn';
 
 // Buyer Required FullContext Component
+// Buyer Required FullContext Component
 const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | null }) => {
-  // Buyer 쪽 Full Context 필드 계산
-  const buyerRequirements = ['vessel_name', 'port', 'delivery_date', 'fuel_type', 'quantity'];
-  const allBuyerRequirements = session?.fuel_type2
-    ? [...buyerRequirements, 'fuel_type2', 'quantity2']
-    : buyerRequirements;
+  // 행 기반 레이아웃: [Vessel], [Port, ETA], [Fuel1, QTY1], [Fuel2, QTY2]
+  const rows = [
+    [
+      { key: 'vessel', label: 'Vessel', value: session?.vessel_name, filled: !!session?.vessel_name, wide: true }
+    ],
+    [
+      { key: 'port', label: 'Port', value: session?.port, filled: !!session?.port },
+      { key: 'eta', label: 'ETA', value: session?.delivery_date, filled: !!session?.delivery_date }
+    ],
+    [
+      { key: 'fuel1', label: 'Fuel1', value: session?.fuel_type, filled: !!session?.fuel_type },
+      { key: 'qty1', label: "QTY1", value: session?.quantity, filled: !!session?.quantity }
+    ],
+    ...(session?.fuel_type2 ? [[
+      { key: 'fuel2', label: 'Fuel2', value: session?.fuel_type2, filled: !!session?.fuel_type2 },
+      { key: 'qty2', label: "QTY2", value: session?.quantity2, filled: !!session?.quantity2 }
+    ]] : [])
+  ];
 
-  const buyerFieldLabels: Record<string, string> = {
-    vessel_name: 'Vessel',
-    port: 'Port',
-    delivery_date: 'ETA',
-    fuel_type: 'Fuel Type',
-    quantity: 'Quantity',
-    fuel_type2: 'Fuel Type 2',
-    quantity2: 'Quantity 2'
-  };
-
-  const buyerFields = allBuyerRequirements.map(field => {
-    const value = session?.[field as keyof typeof session];
-    return {
-      key: field,
-      label: buyerFieldLabels[field] || field,
-      value: value ? String(value) : null,
-      filled: !!value && value !== '',
-      required: true
-    };
-  });
-
-  const buyerCompletion = {
-    filled: buyerFields.filter(f => f.filled).length,
-    total: buyerFields.length,
-    percentage: Math.round((buyerFields.filter(f => f.filled).length / buyerFields.length) * 100)
-  };
+  const allFields = rows.flat();
+  const filledCount = allFields.filter(f => f.filled).length;
+  const totalCount = allFields.length;
+  const percentage = Math.round((filledCount / totalCount) * 100);
 
   return (
     <div className="p-2 border-b bg-gradient-to-r from-purple-50 to-blue-50">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-purple-700">
-          📋 Required FullContext
-        </span>
+        <span className="text-xs font-semibold text-purple-700">Required FullContext</span>
         <span className={cn(
           "text-[10px] px-2 py-0.5 rounded-full",
-          buyerCompletion.percentage === 100
-            ? "bg-green-100 text-green-700"
-            : "bg-yellow-100 text-yellow-700"
+          percentage === 100 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
         )}>
-          {buyerCompletion.filled}/{buyerCompletion.total} ({buyerCompletion.percentage}%)
+          {filledCount}/{totalCount} ({percentage}%)
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-1">
-        {buyerFields.map((field) => (
-          <div
-            key={field.key}
-            className={cn(
-              "flex items-center gap-1 p-1.5 rounded text-[10px]",
-              field.filled
-                ? "bg-green-100/50 border border-green-200"
-                : "bg-white border border-dashed border-gray-300"
-            )}
-          >
-            {field.filled ? (
-              <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
-            ) : (
-              <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-gray-700 truncate">
-                {field.label}
-                {field.required && !field.filled && <span className="text-red-500 ml-0.5">*</span>}
-              </div>
+      <div className="space-y-1">
+        {rows.map((row, rowIdx) => (
+          <div key={rowIdx} className={row.length === 1 ? "" : "grid grid-cols-2 gap-1"}>
+            {row.map((field) => (
               <div
+                key={field.key}
                 className={cn(
-                  "truncate",
-                  field.filled ? "text-green-700" : "text-gray-400 italic"
+                  "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
+                  field.filled ? "bg-green-100/50 border border-green-200" : "bg-white border border-dashed border-gray-300"
                 )}
-                title={field.value || "Missing"}
               >
-                {field.value || "—"}
+                {field.filled ? (
+                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                ) : (
+                  <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                )}
+                <span className="font-medium text-gray-600">{field.label}:</span>
+                <span className={cn("truncate", field.filled ? "text-green-700 font-medium" : "text-gray-400 italic")}>
+                  {field.value || "—"}
+                </span>
               </div>
-            </div>
+            ))}
           </div>
         ))}
       </div>
@@ -513,8 +492,6 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
   );
 });
 BuyerRequiredFullContext.displayName = 'BuyerRequiredFullContext';
-
-
 // AI Assistant Column
 const AIAssistantColumn = memo(() => {
   const {
