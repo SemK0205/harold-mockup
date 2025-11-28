@@ -984,18 +984,22 @@ const AIAssistantColumn = memo(() => {
 
       // 선택된 트레이더 room_names 가져오기 (새로운 로직)
       const selectedRooms = getSelectedRoomNames(suggestion.id, optionIndex);
+      console.log('[AI Approve] selectedRooms:', selectedRooms, 'optionIndex:', optionIndex);
 
       // 1. 백엔드에 승인 요청 (선택된 트레이더 정보 포함)
+      const approvePayload = {
+        selected_options: [optionIndex + 1],
+        modified_message: customMessage || null,
+        selected_targets: {
+          [String(optionIndex + 1)]: selectedRooms  // 선택된 트레이더 room_names (키를 문자열로)
+        }
+      };
+      console.log('[AI Approve] Sending payload:', JSON.stringify(approvePayload, null, 2));
+
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/approve?suggestion_id=${suggestion.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selected_options: [optionIndex + 1],
-          modified_message: customMessage || null,
-          selected_targets: {
-            [optionIndex + 1]: selectedRooms  // 선택된 트레이더 room_names
-          }
-        })
+        body: JSON.stringify(approvePayload)
       });
 
       // 2. 실제 메시지 전송 (action 타입에 따라)
