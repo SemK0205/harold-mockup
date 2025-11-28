@@ -85,6 +85,30 @@ export default function DashboardPage() {
     }
   };
 
+  // Delete 핸들러
+  const handleDelete = async (sessionId: string, vesselName: string) => {
+    if (!confirm(`정말로 "${vesselName}" 딜을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/deals/${sessionId}`,
+        { method: "DELETE" }
+      );
+      if (response.ok) {
+        console.log(`Deal ${sessionId} deleted successfully`);
+        // SSE가 자동으로 목록을 업데이트하므로 추가 작업 불필요
+      } else {
+        console.error("Failed to delete deal:", await response.text());
+        alert("삭제에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("Error deleting deal:", error);
+      alert("삭제 중 오류가 발생했습니다.");
+    }
+  };
+
   // DealScoreboardType을 TradingSession으로 변환 (모달용)
   const convertToSession = (deal: DealScoreboardType | null): TradingSession | null => {
     if (!deal) return null;
@@ -254,7 +278,7 @@ export default function DashboardPage() {
 
         {/* 테이블 뷰 */}
         {viewMode === "table" && (isConnected || deals.length > 0) && (
-          <DealTable deals={deals} onDealClick={handleDealClick} onStatusChange={handleStatusChange} />
+          <DealTable deals={deals} onDealClick={handleDealClick} onStatusChange={handleStatusChange} onDelete={handleDelete} />
         )}
 
         {/* 타임라인 뷰 */}

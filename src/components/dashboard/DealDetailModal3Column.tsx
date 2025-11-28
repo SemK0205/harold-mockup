@@ -985,13 +985,16 @@ const AIAssistantColumn = memo(() => {
       // 선택된 트레이더 room_names 가져오기 (새로운 로직)
       const selectedRooms = getSelectedRoomNames(suggestion.id, optionIndex);
 
-      // 1. 백엔드에 승인 요청
+      // 1. 백엔드에 승인 요청 (선택된 트레이더 정보 포함)
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/approve?suggestion_id=${suggestion.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          selected_option: optionIndex + 1,
-          modified_message: customMessage || null
+          selected_options: [optionIndex + 1],
+          modified_message: customMessage || null,
+          selected_targets: {
+            [optionIndex + 1]: selectedRooms  // 선택된 트레이더 room_names
+          }
         })
       });
 

@@ -7,6 +7,7 @@
 
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Trash2 } from "lucide-react";
 import { DealScoreboard } from "@/types";
 import { useNotificationStore } from "@/stores";
 import { useShallow } from "zustand/react/shallow";
@@ -15,6 +16,7 @@ interface DealTableProps {
   deals: DealScoreboard[];
   onDealClick: (deal: DealScoreboard) => void;
   onStatusChange?: (sessionId: string, newStatus: DealScoreboard["status"]) => void;
+  onDelete?: (sessionId: string, vesselName: string) => void;
 }
 
 type SortField = "created_at" | "updated_at" | "vessel_name" | "port" | "delivery_date" | "status";
@@ -30,7 +32,7 @@ const STATUS_OPTIONS: { value: DealScoreboard["status"]; label: string; color: s
   { value: "cancelled", label: "Cancelled", color: "bg-gray-500" },
 ];
 
-export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps) {
+export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: DealTableProps) {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
@@ -180,12 +182,15 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
                   Updated <SortIcon field="updated_at" />
                 </button>
               </th>
+              <th className="px-4 py-3 text-center font-semibold text-gray-700 w-16">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {sortedDeals.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                   No deals found
                 </td>
               </tr>
@@ -348,6 +353,22 @@ export function DealTable({ deals, onDealClick, onStatusChange }: DealTableProps
                       hour12: true,
                     }) : "-"}
                   </div>
+                </td>
+
+                {/* Delete */}
+                <td className="px-4 py-3 text-center">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onDelete) {
+                        onDelete(deal.session_id, deal.vessel_name || "Unknown");
+                      }
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="Delete deal"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </td>
               </tr>
             ))}
