@@ -22,7 +22,8 @@ import {
   Circle,
   AlertCircle,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -771,6 +772,9 @@ const AIAssistantColumn = memo(() => {
   const [selectedTraderRooms, setSelectedTraderRooms] = useState<Map<string, Set<string>>>(new Map());
   // 전체 트레이더 목록
   const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
+  // 커스텀 트레이더 입력
+  const [customTraderInput, setCustomTraderInput] = useState('');
+  const [customTraders, setCustomTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
 
   // 선택된 타겟 키 생성 헬퍼
   const getTargetKey = (suggestionId: number, optionIndex: number) => `${suggestionId}-${optionIndex}`;
@@ -828,6 +832,57 @@ const AIAssistantColumn = memo(() => {
   const deselectAllTraders = (suggestionId: number, optionIndex: number) => {
     const key = getTargetKey(suggestionId, optionIndex);
     setSelectedTraderRooms(prev => new Map(prev).set(key, new Set()));
+  };
+
+  // 커스텀 트레이더 추가 (room_name 직접 입력)
+  const addCustomTrader = (suggestionId: number, optionIndex: number) => {
+    const trimmedInput = customTraderInput.trim();
+    if (!trimmedInput) return;
+
+    // 이미 존재하는지 확인 (allTraders + customTraders)
+    const existsInAll = allTraders.some(t => t.room_name === trimmedInput);
+    const existsInCustom = customTraders.some(t => t.room_name === trimmedInput);
+
+    if (!existsInAll && !existsInCustom) {
+      // 커스텀 트레이더 목록에 추가
+      const newCustomTrader = {
+        id: `custom_${Date.now()}`,
+        name: trimmedInput,
+        room_name: trimmedInput,
+        platform: 'com.kakao.talk' // 기본값
+      };
+      setCustomTraders(prev => [...prev, newCustomTrader]);
+    }
+
+    // 선택 목록에 추가
+    const key = getTargetKey(suggestionId, optionIndex);
+    setSelectedTraderRooms(prev => {
+      const newMap = new Map(prev);
+      const currentSet = new Set(newMap.get(key) || []);
+      currentSet.add(trimmedInput);
+      newMap.set(key, currentSet);
+      return newMap;
+    });
+
+    // 입력 초기화
+    setCustomTraderInput('');
+  };
+
+  // 커스텀 트레이더 삭제
+  const removeCustomTrader = (roomName: string) => {
+    setCustomTraders(prev => prev.filter(t => t.room_name !== roomName));
+    // 선택 목록에서도 제거
+    setSelectedTraderRooms(prev => {
+      const newMap = new Map(prev);
+      newMap.forEach((set, key) => {
+        if (set.has(roomName)) {
+          const newSet = new Set(set);
+          newSet.delete(roomName);
+          newMap.set(key, newSet);
+        }
+      });
+      return newMap;
+    });
   };
 
   // 선택된 트레이더 수 가져오기
@@ -1335,11 +1390,78 @@ const AIAssistantColumn = memo(() => {
                                 </div>
                               );
                             })}
+
+                            {/* 커스텀 트레이더 목록 */}
+                            {customTraders.map((trader) => {
+                              const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
+                              return (
+                                <div
+                                  key={trader.id}
+                                  className={cn(
+                                    "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
+                                    isSelected ? "bg-purple-50 border border-purple-200" : "bg-gray-50 border border-transparent hover:bg-gray-100"
+                                  )}
+                                  onClick={() => toggleTraderRoom(suggestion.id, selectedOptionIndex, trader.room_name)}
+                                >
+                                  <div className={cn(
+                                    "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
+                                    isSelected ? "bg-purple-500 border-purple-500" : "bg-white border-gray-300"
+                                  )}>
+                                    {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                  </div>
+                                  <span className={cn(
+                                    "truncate flex-1",
+                                    isSelected ? "text-purple-900 font-medium" : "text-gray-700"
+                                  )}>
+                                    {trader.room_name}
+                                  </span>
+                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-purple-100 text-purple-700 border-purple-200">
+                                    직접추가
+                                  </Badge>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeCustomTrader(trader.room_name);
+                                    }}
+                                    className="p-0.5 hover:bg-red-100 rounded"
+                                  >
+                                    <X className="w-3 h-3 text-red-500" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* 커스텀 트레이더 입력 */}
+                          <div className="px-2 py-2 border-t border-b">
+                            <div className="flex gap-1">
+                              <Input
+                                type="text"
+                                placeholder="채팅방 이름 직접 입력..."
+                                value={customTraderInput}
+                                onChange={(e) => setCustomTraderInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addCustomTrader(suggestion.id, selectedOptionIndex);
+                                  }
+                                }}
+                                className="h-7 text-xs flex-1"
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2"
+                                onClick={() => addCustomTrader(suggestion.id, selectedOptionIndex)}
+                              >
+                                <Plus className="w-3 h-3" />
+                              </Button>
+                            </div>
                           </div>
 
                           {/* 선택 카운터 */}
-                          <div className="px-3 py-2 border-t bg-gray-50 text-xs text-gray-600">
-                            {getSelectedTraderCount(suggestion.id, selectedOptionIndex)} of {allTraders.length} selected
+                          <div className="px-3 py-2 bg-gray-50 text-xs text-gray-600">
+                            {getSelectedTraderCount(suggestion.id, selectedOptionIndex)} of {allTraders.length + customTraders.length} selected
                           </div>
                         </div>
                       )}
