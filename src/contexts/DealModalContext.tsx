@@ -6,6 +6,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import type { ChatMessage, TradingSession, AISuggestion } from '@/types';
+import useDealStore from '@/stores/useDealStore';
 
 interface ModalColumn {
   width: number;
@@ -106,6 +107,38 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
   const [activeSellerTab, setActiveSellerTab] = useState<string | null>(null);
   const [sellerTabs, setSellerTabs] = useState<string[]>([]);
   const [sellerMessages, setSellerMessages] = useState<Map<string, ChatMessage[]>>(new Map());
+
+  // 전역 store에서 seller_contexts 구독
+  const storeSellerContexts = useDealStore(
+    (state) => session?.session_id ? state.sellerContextsBySession.get(session.session_id) : undefined
+  );
+
+  // seller_contexts가 변경되면 sellerTabs 동기화
+  useEffect(() => {
+    if (!session?.session_id) return;
+
+    // 전역 store의 seller_contexts 또는 session의 seller_contexts에서 traders 추출
+    const contexts = storeSellerContexts || session?.seller_contexts;
+    if (!contexts) return;
+
+    const tradersFromContexts = Object.keys(contexts);
+    if (tradersFromContexts.length === 0) return;
+
+    // 현재 sellerTabs에 없는 새로운 traders만 추가
+    setSellerTabs(prev => {
+      const newTraders = tradersFromContexts.filter(t => !prev.includes(t));
+      if (newTraders.length === 0) return prev;
+
+      console.log('[DealModalContext] Adding new seller tabs from seller_contexts:', newTraders);
+      return [...prev, ...newTraders];
+    });
+
+    // activeSellerTab이 없으면 첫 번째 탭 활성화
+    setActiveSellerTab(prev => {
+      if (prev) return prev;
+      return tradersFromContexts[0] || null;
+    });
+  }, [session?.session_id, storeSellerContexts, session?.seller_contexts]);
 
   // UI State
   const [isResizing, setIsResizing] = useState(false);
