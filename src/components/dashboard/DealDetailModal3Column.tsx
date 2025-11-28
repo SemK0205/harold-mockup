@@ -779,7 +779,7 @@ const AIAssistantColumn = memo(() => {
   useEffect(() => {
     const fetchAllTraders = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/traders/all`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/traders/all`);
         if (response.ok) {
           const data = await response.json();
           setAllTraders(data);
