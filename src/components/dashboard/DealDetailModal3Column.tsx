@@ -426,8 +426,65 @@ const BuyerChatColumn = memo(() => {
 BuyerChatColumn.displayName = 'BuyerChatColumn';
 
 // Buyer Required FullContext Component
-// Buyer Required FullContext Component
 const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | null }) => {
+  const { addBuyerMessage, getRoomPlatform } = useDealModal();
+
+  // 필드별 질문 메시지
+  const fieldQuestions: Record<string, string> = {
+    vessel: 'Please confirm the vessel name.',
+    port: 'Please confirm the port.',
+    eta: 'Please confirm the ETA.',
+    fuel1: 'Please confirm the fuel type.',
+    qty1: 'Please confirm the quantity.',
+    fuel2: 'Please confirm the second fuel type.',
+    qty2: 'Please confirm the second fuel quantity.'
+  };
+
+  // 빈 필드 클릭 시 질문 전송
+  const handleMissingFieldClick = async (fieldKey: string) => {
+    if (!session) return;
+
+    const question = fieldQuestions[fieldKey];
+    if (!question) return;
+
+    const platform = getRoomPlatform(session.customer_room_name);
+    const platformToInternal: Record<string, string> = {
+      'com.kakao.talk': 'kakao',
+      'com.kakao.yellowid': 'kakao_biz',
+      'com.whatsapp': 'whatsapp',
+      'com.wechat': 'wechat'
+    };
+    const internalPlatform = platformToInternal[platform] || 'kakao';
+
+    // 로컬 상태에 메시지 추가
+    const message: ChatMessage = {
+      message_id: Date.now(),
+      room_name: session.customer_room_name,
+      sender: 'Harold',
+      message: question,
+      timestamp: new Date().toISOString(),
+      package_name: platform as ChatMessage['package_name'],
+      direction: 'outgoing',
+      created_at: new Date().toISOString()
+    };
+    addBuyerMessage(message);
+
+    // 백엔드로 전송
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_name: session.customer_room_name,
+          message: question,
+          platform: internalPlatform
+        })
+      });
+    } catch (error) {
+      console.error('Failed to send question:', error);
+    }
+  };
+
   // 행 기반 레이아웃: [Vessel], [Port, ETA], [Fuel1, QTY1], [Fuel2, QTY2]
   const rows = [
     [
@@ -469,9 +526,13 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
             {row.map((field) => (
               <div
                 key={field.key}
+                onClick={() => !field.filled && handleMissingFieldClick(field.key)}
+                title={!field.filled ? `Click to ask: "${fieldQuestions[field.key]}"` : ''}
                 className={cn(
                   "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
-                  field.filled ? "bg-green-100/50 border border-green-200" : "bg-white border border-dashed border-gray-300"
+                  field.filled
+                    ? "bg-green-100/50 border border-green-200"
+                    : "bg-white border border-dashed border-gray-300 cursor-pointer hover:bg-red-50 hover:border-red-300"
                 )}
               >
                 {field.filled ? (
