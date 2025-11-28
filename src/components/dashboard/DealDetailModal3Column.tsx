@@ -6,13 +6,12 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect, memo, useRef } from "react";
+import { useState, useCallback, useEffect, memo, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Send,
   User,
@@ -27,8 +26,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import type { TradingSession, ChatMessage, AISuggestion, SellerStatus, SellerContext, DealStage, SellerRequiredField } from "@/types";
-import { getSellerRequiredFields, getFieldCompletionRatio, DEAL_STAGE_LABELS_KO } from "@/types";
+import type { TradingSession, ChatMessage, AISuggestion, SellerStatus, SellerContext, DealStage } from "@/types";
+import { getSellerRequiredFields, getFieldCompletionRatio } from "@/types";
 import { DealModalProvider, useDealModal } from "@/contexts/DealModalContext";
 import { useSSEManager } from "@/hooks/useSSEManager";
 import SSEConnectionManager from "@/lib/sse/SSEConnectionManager";
@@ -578,6 +577,177 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
   );
 });
 BuyerRequiredFullContext.displayName = 'BuyerRequiredFullContext';
+
+// Seller Quote Comparison Table (Excel-style)
+const SellerQuoteComparisonTable = memo(() => {
+  const { session, getRoomPlatform, addSellerMessage } = useDealModal();
+
+  // 전역 store에서 seller_contexts 가져오기
+  const sessionId = session?.session_id || '';
+  const sellerContextsMap = useDealStore((state) => state.sellerContextsBySession);
+  const storeSellerContexts = sessionId ? sellerContextsMap.get(sessionId) : undefined;
+
+  // 판매자 목록 (seller_contexts 우선, 없으면 requested_traders)
+  const sellers = storeSellerContexts
+    ? Object.keys(storeSellerContexts)
+    : session?.seller_contexts
+      ? Object.keys(session.seller_contexts)
+      : session?.requested_traders || [];
+
+  // 유종 개수에 따른 필드 결정
+  const fuelCount = session?.fuel_type2 ? 2 : 1;
+  const fields = [
+    { key: 'fuel1_price', label: `${session?.fuel_type || 'Fuel1'} Price` },
+    ...(fuelCount >= 2 ? [{ key: 'fuel2_price', label: `${session?.fuel_type2 || 'Fuel2'} Price` }] : []),
+    { key: 'barge_fee', label: 'Barge Fee' },
+    { key: 'earliest', label: 'Earliest' }
+  ];
+
+  // 판매자 컨텍스트 가져오기 (store 우선, 없으면 session)
+  const getSellerContext = (trader: string): SellerContext | undefined => {
+    return storeSellerContexts?.[trader] || session?.seller_contexts?.[trader];
+  };
+
+  // 필드 값 가져오기
+  const getFieldValue = (trader: string, fieldKey: string): string | null => {
+    const context = getSellerContext(trader);
+    if (!context) return null;
+
+    if (fieldKey === 'earliest') {
+      return context.earliest || null;
+    }
+    return context.quote?.[fieldKey as keyof typeof context.quote] || null;
+  };
+
+  // 질문 메시지 생성
+  const getFieldQuestion = (fieldKey: string, lang: 'ko' | 'en' = 'ko'): string => {
+    const questions: Record<string, Record<string, string>> = {
+      fuel1_price: { ko: '가격이 어떻게 되나요?', en: 'What is the price?' },
+      fuel2_price: { ko: '두번째 유종 가격이 어떻게 되나요?', en: 'What is the price for the second fuel?' },
+      barge_fee: { ko: '바지피가 어떻게 되나요?', en: 'What is the barge fee?' },
+      earliest: { ko: '얼리 언제인가요?', en: 'When is the earliest?' }
+    };
+    return questions[fieldKey]?.[lang] || questions[fieldKey]?.['ko'] || '';
+  };
+
+  // 빈 셀 클릭 시 해당 판매자에게 질문 전송
+  const handleCellClick = async (trader: string, fieldKey: string) => {
+    const question = getFieldQuestion(fieldKey); // TODO: 트레이더 언어 설정에 따라 lang 파라미터 추가
+    if (!question) return;
+
+    const platform = getRoomPlatform(trader);
+    const platformToInternal: Record<string, string> = {
+      'com.kakao.talk': 'kakao',
+      'com.kakao.yellowid': 'kakao_biz',
+      'com.whatsapp': 'whatsapp',
+      'com.wechat': 'wechat'
+    };
+    const internalPlatform = platformToInternal[platform] || 'kakao';
+
+    // 로컬 상태에 메시지 추가
+    const message: ChatMessage = {
+      message_id: Date.now(),
+      room_name: trader,
+      sender: 'Harold',
+      message: question,
+      timestamp: new Date().toISOString(),
+      package_name: platform as ChatMessage['package_name'],
+      direction: 'outgoing',
+      created_at: new Date().toISOString()
+    };
+    addSellerMessage(trader, message);
+
+    // 백엔드로 전송
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_name: trader,
+          message: question,
+          platform: internalPlatform
+        })
+      });
+    } catch (error) {
+      console.error('Failed to send question:', error);
+    }
+  };
+
+  // 판매자 이름 축약 (긴 이름 처리)
+  const shortenTraderName = (name: string): string => {
+    if (name.length <= 10) return name;
+    return name.slice(0, 8) + '..';
+  };
+
+  if (sellers.length === 0) {
+    return (
+      <div className="p-3 bg-white border rounded-lg">
+        <div className="text-xs text-gray-500 text-center py-4">
+          No sellers requested yet
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
+        <span className="text-xs font-semibold text-indigo-700">Seller Quote Matrix</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[10px]">
+          <thead>
+            <tr className="bg-gray-50 border-b">
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600 sticky left-0 bg-gray-50 min-w-[80px]">
+                Field
+              </th>
+              {sellers.map((seller) => (
+                <th
+                  key={seller}
+                  className="px-2 py-1.5 text-center font-medium text-gray-700 min-w-[70px] max-w-[90px]"
+                  title={seller}
+                >
+                  {shortenTraderName(seller)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((field, rowIdx) => (
+              <tr key={field.key} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                <td className="px-2 py-1.5 font-medium text-gray-600 sticky left-0 bg-inherit border-r">
+                  {field.label}
+                </td>
+                {sellers.map((seller) => {
+                  const value = getFieldValue(seller, field.key);
+                  const hasValue = !!value;
+
+                  return (
+                    <td
+                      key={`${seller}-${field.key}`}
+                      onClick={() => !hasValue && handleCellClick(seller, field.key)}
+                      title={!hasValue ? `Click to ask: "${getFieldQuestion(field.key)}"` : value || ''}
+                      className={cn(
+                        "px-2 py-1.5 text-center",
+                        hasValue
+                          ? "text-green-700 font-medium"
+                          : "text-gray-400 cursor-pointer hover:bg-red-50"
+                      )}
+                    >
+                      {hasValue ? value : '—'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+});
+SellerQuoteComparisonTable.displayName = 'SellerQuoteComparisonTable';
+
 // AI Assistant Column
 const AIAssistantColumn = memo(() => {
   const {
@@ -940,6 +1110,9 @@ const AIAssistantColumn = memo(() => {
 
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
+          {/* Seller Quote Comparison Table (Excel-style) */}
+          <SellerQuoteComparisonTable />
+
           {/* Full Context Section */}
           <div className="bg-white p-3 rounded-lg border">
             <div
@@ -1634,20 +1807,9 @@ const SellerChatsColumn = memo(() => {
                 trader={activeSellerTab}
                 messages={sellerMessages.get(activeSellerTab) || []}
                 inputValue={inputValues[activeSellerTab] || ''}
-                onInputChange={(value) => setInputValues(prev => ({ ...prev, [activeSellerTab]: value }))}
+                onInputChange={(value: string) => setInputValues(prev => ({ ...prev, [activeSellerTab]: value }))}
                 onSend={() => handleSend(activeSellerTab)}
                 sellerContext={getSellerContext(activeSellerTab)}
-                dealStage={(session?.stage as DealStage) || "quote_collecting"}
-                fuelCount={session?.fuel_type2 ? 2 : 1}
-                onFieldUpdate={(field, value) => {
-                  updateSellerContext(activeSellerTab, field, value);
-                }}
-                onSendQuestion={(question) => {
-                  // 입력창에 질문 설정 후 전송
-                  setInputValues(prev => ({ ...prev, [activeSellerTab]: question }));
-                  // 약간의 지연 후 전송 (상태 업데이트 대기)
-                  setTimeout(() => handleSend(activeSellerTab), 100);
-                }}
               />
             )}
           </div>
@@ -1763,11 +1925,7 @@ const SellerChatRoom = memo(({
   inputValue,
   onInputChange,
   onSend,
-  sellerContext,
-  dealStage,
-  fuelCount,
-  onFieldUpdate,
-  onSendQuestion
+  sellerContext
 }: {
   trader: string;
   messages: ChatMessage[];
@@ -1775,53 +1933,9 @@ const SellerChatRoom = memo(({
   onInputChange: (value: string) => void;
   onSend: () => void;
   sellerContext?: SellerContext;
-  dealStage?: DealStage;
-  fuelCount?: number;
-  onFieldUpdate?: (field: string, value: string) => void;
-  onSendQuestion?: (question: string) => void;
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isFirstLoadRef = useRef(true);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-
-  // 판매측 필드별 질문 메시지 (오퍼가격 취합 단계)
-  // TODO: trader 정보에서 language 가져와서 언어 결정 (현재는 한국어 기본)
-  const getSellerFieldQuestion = (fieldKey: string, lang: 'ko' | 'en' = 'ko'): string => {
-    const questions: Record<string, Record<string, string>> = {
-      fuel1_price: { ko: '가격이 어떻게 되나요?', en: 'What is the price?' },
-      fuel2_price: { ko: '두번째 유종 가격이 어떻게 되나요?', en: 'What is the price for the second fuel?' },
-      fuel3_price: { ko: '세번째 유종 가격이 어떻게 되나요?', en: 'What is the price for the third fuel?' },
-      barge_fee: { ko: '바지피가 어떻게 되나요?', en: 'What is the barge fee?' },
-      earliest: { ko: '얼리 언제인가요?', en: 'When is the earliest?' }
-    };
-    return questions[fieldKey]?.[lang] || questions[fieldKey]?.['ko'] || '';
-  };
-
-  // 하위 호환을 위한 객체 (툴팁 등에서 사용)
-  const sellerFieldQuestions: Record<string, string> = {
-    fuel1_price: getSellerFieldQuestion('fuel1_price'),
-    fuel2_price: getSellerFieldQuestion('fuel2_price'),
-    fuel3_price: getSellerFieldQuestion('fuel3_price'),
-    barge_fee: getSellerFieldQuestion('barge_fee'),
-    earliest: getSellerFieldQuestion('earliest')
-  };
-
-  // 빈 필드 클릭 시 질문 전송
-  const handleMissingFieldClick = (fieldKey: string) => {
-    const question = getSellerFieldQuestion(fieldKey); // TODO: lang 파라미터 추가
-    if (question && onSendQuestion) {
-      onSendQuestion(question);
-    }
-  };
-
-  // 수집 필요 필드 계산
-  const requiredFields = getSellerRequiredFields(
-    dealStage || "quote_collecting",
-    fuelCount || 1,
-    sellerContext
-  );
-  const completion = getFieldCompletionRatio(requiredFields);
 
   // Auto scroll to bottom - instant on first load, smooth on updates
   useEffect(() => {
@@ -1835,96 +1949,9 @@ const SellerChatRoom = memo(({
     }
   }, [messages]);
 
-  const handleFieldEdit = (field: SellerRequiredField) => {
-    setEditingField(field.key);
-    setEditValue(field.value || "");
-  };
-
-  const handleFieldSave = () => {
-    if (editingField && onFieldUpdate) {
-      onFieldUpdate(editingField, editValue);
-    }
-    setEditingField(null);
-    setEditValue("");
-  };
-
   return (
     <div className="flex flex-col h-full">
-      {/* Required Info Panel - waiting_quote, quote_received, renegotiating 상태에서 표시 (no_offer 제외) */}
-      {sellerContext?.status !== "no_offer" && (sellerContext?.status === "waiting_quote" || sellerContext?.status === "quote_received" || sellerContext?.status === "renegotiating" || dealStage === "quote_collecting" || dealStage === "deal_started") && (
-        <div className="p-2 border-b bg-gradient-to-r from-purple-50 to-blue-50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-purple-700">
-              📋 Required FullContext
-            </span>
-            <span className={cn(
-              "text-[10px] px-2 py-0.5 rounded-full",
-              completion.percentage === 100
-                ? "bg-green-100 text-green-700"
-                : "bg-yellow-100 text-yellow-700"
-            )}>
-              {completion.filled}/{completion.total} ({completion.percentage}%)
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            {requiredFields.map((field) => (
-              <div
-                key={field.key}
-                onClick={() => !field.filled && handleMissingFieldClick(field.key)}
-                title={!field.filled && sellerFieldQuestions[field.key] ? `클릭하여 질문: "${sellerFieldQuestions[field.key]}"` : ''}
-                className={cn(
-                  "flex items-center gap-1 p-1.5 rounded text-[10px]",
-                  field.filled
-                    ? "bg-green-100/50 border border-green-200"
-                    : "bg-white border border-dashed border-gray-300 cursor-pointer hover:bg-red-50 hover:border-red-300"
-                )}
-              >
-                {field.filled ? (
-                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
-                ) : (
-                  <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-700 truncate">
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                  </div>
-                  {editingField === field.key ? (
-                    <div className="flex gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="flex-1 px-1 py-0.5 text-[10px] border rounded"
-                        placeholder="Enter value..."
-                        autoFocus
-                        onKeyPress={(e) => e.key === "Enter" && handleFieldSave()}
-                      />
-                      <button
-                        onClick={handleFieldSave}
-                        className="px-1 text-[9px] bg-blue-500 text-white rounded"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      className={cn(
-                        "truncate rounded px-0.5",
-                        field.filled ? "text-green-700 cursor-pointer hover:bg-gray-100" : "text-gray-400 italic"
-                      )}
-                      onClick={(e) => { if (field.filled) { e.stopPropagation(); handleFieldEdit(field); } }}
-                      title={field.filled ? (field.value || "Click to edit") : undefined}
-                    >
-                      {field.value || "—"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Required FullContext는 AI Assistant의 Seller Quote Matrix로 이동됨 */}
 
       {/* Margin Calculation Panel (+$2) - Only show when quote exists */}
       {sellerContext?.quote && sellerContext.quote.fuel1_price && (
