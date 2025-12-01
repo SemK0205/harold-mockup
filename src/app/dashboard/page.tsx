@@ -16,6 +16,7 @@ import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { dealScoreboardAPI } from "@/lib/api/endpoints";
+import { getApiUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DealScoreboard as DealScoreboardType, TradingSession } from "@/types";
@@ -70,7 +71,7 @@ export default function DashboardPage() {
   const handleStatusChange = async (sessionId: string, newStatus: DealScoreboardType["status"]) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/sessions/${sessionId}/status`,
+        `${getApiUrl()}/sessions/${sessionId}/status`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -96,7 +97,7 @@ export default function DashboardPage() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/deals/${sessionId}`,
+        `${getApiUrl()}/deals/${sessionId}`,
         { method: "DELETE" }
       );
       if (response.ok) {

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X } from "lucide-react";
+import { getApiUrl } from "@/lib/api/client";
 
 interface AddInquiryModalProps {
   open: boolean;
@@ -63,7 +64,7 @@ export function AddInquiryModal({ open, onClose, onSuccess }: AddInquiryModalPro
     setError(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sessions/manual`, {
+      const response = await fetch(`${getApiUrl()}/sessions/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

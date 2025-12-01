@@ -7,8 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { DealScoreboard } from "@/types";
 import { useDealStore, useNotificationStore } from "@/stores";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:59234";
+import { getApiUrl } from "@/lib/api/client";
 
 interface UseDealsSSEOptions {
   port?: string;
@@ -86,7 +85,7 @@ export function useDealsSSE(options: UseDealsSSEOptions = {}): UseDealsSSEReturn
     if (status) params.append("status", status);
     if (customer) params.append("customer", customer);
 
-    const url = `${API_BASE_URL}/api/deals/stream${params.toString() ? `?${params.toString()}` : ""}`;
+    const url = `${getApiUrl()}/api/deals/stream${params.toString() ? `?${params.toString()}` : ""}`;
 
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;

@@ -10,6 +10,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { useChatRooms, useSendMessage } from "@/lib/api/queries";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { chatMessagesAPI, roomCategoryAPI, configAPI } from "@/lib/api/endpoints";
+import { getApiUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -98,9 +99,8 @@ export default function ChatsPage() {
             'com.wechat': 'wechat'
           };
           const internalPlatform = platformToInternal[selectedRoom.platform] || 'kakao';
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:59234";
           await fetch(
-            `${apiUrl}/chats/${encodeURIComponent(selectedRoom.room_name)}/mark-read?platform=${internalPlatform}`,
+            `${getApiUrl()}/chats/${encodeURIComponent(selectedRoom.room_name)}/mark-read?platform=${internalPlatform}`,
             { method: 'POST' }
           );
         } catch (error) {
@@ -114,8 +114,7 @@ export default function ChatsPage() {
   // SSE 실시간 메시지 구독 (마운트 시 1회만 연결)
   useEffect(() => {
     console.log("🔌 SSE 연결 시작...");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:59234";
-    const eventSource = new EventSource(`${apiUrl}/sse/messages`);
+    const eventSource = new EventSource(`${getApiUrl()}/sse/messages`);
 
     eventSource.addEventListener("connected", (event) => {
       console.log("✅ SSE 연결 성공:", event.data);

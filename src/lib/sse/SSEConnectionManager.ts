@@ -5,6 +5,7 @@
  */
 
 import type { ChatMessage } from '@/types';
+import { getApiUrl } from '@/lib/api/client';
 
 type MessageListener = (message: ChatMessage) => void;
 type ConnectionListener = (connected: boolean) => void;
@@ -28,6 +29,7 @@ class SSEConnectionManager {
   private apiUrl: string;
 
   private constructor() {
+    // getApiUrl()은 동적으로 데모 모드를 감지하므로 connect() 시점에 호출
     this.apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:59234';
   }
 
@@ -49,7 +51,9 @@ class SSEConnectionManager {
     console.log('[SSE Manager] Connecting to SSE...');
 
     try {
-      this.eventSource = new EventSource(`${this.apiUrl}/sse/messages`);
+      // 데모 모드 감지하여 적절한 API URL 사용
+      const currentApiUrl = getApiUrl();
+      this.eventSource = new EventSource(`${currentApiUrl}/sse/messages`);
 
       this.eventSource.addEventListener('connected', () => {
         console.log('[SSE Manager] Connected successfully');

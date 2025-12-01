@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Loader2 } from "lucide-react";
 import axios from "axios";
+import { getApiUrl } from "@/lib/api/client";
 
 interface ExportButtonsProps {
   filters?: {
@@ -37,7 +38,7 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
       if (filters.dateTo) params.append("date_to", filters.dateTo);
 
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/deals/export/csv?${params.toString()}`,
+        `${getApiUrl()}/deals/export/csv?${params.toString()}`,
         {
           responseType: "blob",
         }
@@ -86,7 +87,7 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
       if (filters.customer) params.append("customer", filters.customer);
 
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/deals/scoreboard?${params.toString()}`
+        `${getApiUrl()}/deals/scoreboard?${params.toString()}`
       );
 
       const deals = response.data.data || [];

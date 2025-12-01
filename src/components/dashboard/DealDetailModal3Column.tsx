@@ -33,6 +33,7 @@ import { DealModalProvider, useDealModal } from "@/contexts/DealModalContext";
 import { useSSEManager } from "@/hooks/useSSEManager";
 import SSEConnectionManager from "@/lib/sse/SSEConnectionManager";
 import { useDealStore } from "@/stores";
+import { getApiUrl } from "@/lib/api/client";
 
 interface DealDetailModalProps {
   session: TradingSession | null;
@@ -78,7 +79,7 @@ function DealDetailModalContent({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const fetchRoomPlatforms = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chats/rooms`);
+        const response = await fetch(`${getApiUrl()}/chats/rooms`);
         if (response.ok) {
           const data = await response.json();
           const platformMap = new Map<string, string>();
@@ -251,7 +252,7 @@ const BuyerChatColumn = memo(() => {
     const fetchMessages = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/chats/${encodeURIComponent(session.customer_room_name)}/messages?platform=${platform}`
+          `${getApiUrl()}/chats/${encodeURIComponent(session.customer_room_name)}/messages?platform=${platform}`
         );
         if (response.ok) {
           const data = await response.json();
@@ -299,7 +300,7 @@ const BuyerChatColumn = memo(() => {
             };
             const internalPlatform = platformToInternal[platform] || 'kakao';
             await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/chats/${encodeURIComponent(session.customer_room_name)}/mark-read?platform=${internalPlatform}`,
+              `${getApiUrl()}/chats/${encodeURIComponent(session.customer_room_name)}/mark-read?platform=${internalPlatform}`,
               { method: 'POST' }
             );
           } catch (markReadError) {
@@ -365,7 +366,7 @@ const BuyerChatColumn = memo(() => {
 
     // Send to backend - /messages/send 엔드포인트 사용
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+      await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -496,7 +497,7 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
 
     // 백엔드로 전송
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+      await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -660,7 +661,7 @@ const SellerQuoteComparisonTable = memo(() => {
 
     // 백엔드로 전송
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+      await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -783,7 +784,7 @@ const AIAssistantColumn = memo(() => {
   useEffect(() => {
     const fetchAllTraders = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/traders/all`);
+        const response = await fetch(`${getApiUrl()}/api/traders/all`);
         if (response.ok) {
           const data = await response.json();
           setAllTraders(data);
@@ -966,7 +967,7 @@ const AIAssistantColumn = memo(() => {
     const fetchSuggestions = async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/session/${session.session_id}`
+          `${getApiUrl()}/ai-suggestions/session/${session.session_id}`
         );
         if (response.ok) {
           const data = await response.json();
@@ -1012,7 +1013,7 @@ const AIAssistantColumn = memo(() => {
 
     // 백엔드로 전송
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+      await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1051,7 +1052,7 @@ const AIAssistantColumn = memo(() => {
       };
       console.log('[AI Approve] Sending payload:', JSON.stringify(approvePayload, null, 2));
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/approve?suggestion_id=${suggestion.id}`, {
+      await fetch(`${getApiUrl()}/ai-suggestions/approve?suggestion_id=${suggestion.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(approvePayload)
@@ -1071,7 +1072,7 @@ const AIAssistantColumn = memo(() => {
             'com.wechat': 'wechat'
           };
 
-          await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+          await fetch(`${getApiUrl()}/messages/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1103,7 +1104,7 @@ const AIAssistantColumn = memo(() => {
         };
         addBuyerMessage(chatMessage);
 
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+        await fetch(`${getApiUrl()}/messages/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1128,7 +1129,7 @@ const AIAssistantColumn = memo(() => {
               'com.wechat': 'wechat'
             };
 
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+            await fetch(`${getApiUrl()}/messages/send`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1166,7 +1167,7 @@ const AIAssistantColumn = memo(() => {
     setIsProcessing(true);
 
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai-suggestions/reject?suggestion_id=${suggestion.id}`, {
+      await fetch(`${getApiUrl()}/ai-suggestions/reject?suggestion_id=${suggestion.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason })
@@ -1643,7 +1644,7 @@ const SellerChatsColumn = memo(() => {
       }
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/sessions/${session.session_id}/seller-context/${encodeURIComponent(trader)}`,
+        `${getApiUrl()}/sessions/${session.session_id}/seller-context/${encodeURIComponent(trader)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1700,7 +1701,7 @@ const SellerChatsColumn = memo(() => {
       const fetchMessages = async () => {
         try {
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/chats/${encodeURIComponent(trader)}/messages?platform=${platform}`
+            `${getApiUrl()}/chats/${encodeURIComponent(trader)}/messages?platform=${platform}`
           );
           if (response.ok) {
             const data = await response.json();
@@ -1730,7 +1731,7 @@ const SellerChatsColumn = memo(() => {
               };
               const internalPlatform = platformToInternal[platform] || 'kakao';
               await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/chats/${encodeURIComponent(trader)}/mark-read?platform=${internalPlatform}`,
+                `${getApiUrl()}/chats/${encodeURIComponent(trader)}/mark-read?platform=${internalPlatform}`,
                 { method: 'POST' }
               );
             } catch (markReadError) {
@@ -1802,7 +1803,7 @@ const SellerChatsColumn = memo(() => {
 
     // Send to backend - /messages/send 엔드포인트 사용
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send`, {
+      await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
