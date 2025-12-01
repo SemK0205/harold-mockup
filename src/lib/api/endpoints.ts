@@ -5,7 +5,6 @@
 
 import { apiClient } from "./client";
 import type {
-  TradingSession,
   AISuggestion,
   ChatMessage,
   ApproveAISuggestionRequest,
@@ -17,18 +16,6 @@ import type {
   PaginatedResponse,
   RoomInfo,
 } from "@/types";
-
-// ============================================
-// Trading Sessions API
-// ============================================
-
-export const tradingSessionsAPI = {
-  // 모든 활성 세션 조회
-  getActiveSessions: async (): Promise<TradingSession[]> => {
-    const response = await apiClient.get("/sessions/active");
-    return response.data;
-  },
-};
 
 // ============================================
 // AI Suggestions API

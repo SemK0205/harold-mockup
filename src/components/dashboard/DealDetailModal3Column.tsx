@@ -437,9 +437,20 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
       vessel: { ko: '배 이름이 어떻게 되나요?', en: 'What is the vessel name?' },
       port: { ko: '포트가 어떻게 되나요?', en: 'What is the port?' },
       eta: { ko: 'ETA가 어떻게 되나요?', en: 'What is the ETA?' },
-      fuel1: { ko: '유종이 어떻게 되나요?', en: 'What is the fuel type?' },
-      fuel2: { ko: '두번째 유종이 어떻게 되나요?', en: 'What is the second fuel type?' }
+      fuel1: { ko: '유종이 어떻게 되나요?', en: 'What is the fuel type?' }
     };
+
+    // fuel2 질문은 유종명을 동적으로 포함
+    if (fieldKey === 'fuel2') {
+      if (lang === 'en') {
+        return session?.fuel_type2
+          ? `What is the ${session.fuel_type2} type?`
+          : 'What is the second fuel type?';
+      }
+      return session?.fuel_type2
+        ? `${session.fuel_type2} 유종이 어떻게 되나요?`
+        : '유종이 어떻게 되나요?';
+    }
 
     // 수량 질문은 해당 유종명을 포함
     if (fieldKey === 'qty1') {
@@ -460,7 +471,7 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
       }
       return session?.fuel_type2
         ? `${session.fuel_type2} 수량은 어떻게 되나요?`
-        : '두번째 유종 수량은 어떻게 되나요?';
+        : '수량은 어떻게 되나요?';
     }
 
     return questions[fieldKey]?.[lang] || questions[fieldKey]?.['ko'] || '';
@@ -1058,40 +1069,10 @@ const AIAssistantColumn = memo(() => {
         body: JSON.stringify(approvePayload)
       });
 
-      // 2. 실제 메시지 전송 (action 타입에 따라)
-      if (option.action === 'send_to_suppliers') {
-        // 선택된 트레이더에게만 전송 (전체 트레이더 중 선택된 것)
-        for (const targetRoom of selectedRooms) {
-          // 트레이더 정보 찾기
-          const trader = allTraders.find(t => t.room_name === targetRoom);
-          const platform = trader?.platform || getRoomPlatform(targetRoom);
-          const platformToInternal: Record<string, string> = {
-            'com.kakao.talk': 'kakao',
-            'com.kakao.yellowid': 'kakao_biz',
-            'com.whatsapp': 'whatsapp',
-            'com.wechat': 'wechat'
-          };
-
-          await fetch(`${getApiUrl()}/messages/send`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              room_name: targetRoom,
-              message: messageToSend,
-              platform: platformToInternal[platform] || 'kakao'
-            })
-          });
-        }
-      } else if (option.action === 'reply_to_customer' && messageToSend) {
-        // 고객에게 답장
+      // 백엔드에서 메시지 전송을 처리하므로 프론트엔드에서는 UI 업데이트만 수행
+      // reply_to_customer인 경우 UI에 메시지 추가
+      if (option.action === 'reply_to_customer' && messageToSend) {
         const platform = getRoomPlatform(session.customer_room_name);
-        const platformToInternal: Record<string, string> = {
-          'com.kakao.talk': 'kakao',
-          'com.kakao.yellowid': 'kakao_biz',
-          'com.whatsapp': 'whatsapp',
-          'com.wechat': 'wechat'
-        };
-
         const chatMessage: ChatMessage = {
           message_id: Date.now(),
           room_name: session.customer_room_name,
@@ -1103,46 +1084,9 @@ const AIAssistantColumn = memo(() => {
           created_at: new Date().toISOString()
         };
         addBuyerMessage(chatMessage);
-
-        await fetch(`${getApiUrl()}/messages/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            room_name: session.customer_room_name,
-            message: messageToSend,
-            platform: platformToInternal[platform] || 'kakao'
-          })
-        });
-      } else if (option.action === 'send_multiple' && Array.isArray(option.targets)) {
-        // 선택된 대상에게만 각각 다른 메시지 전송
-        for (const target of option.targets) {
-          if (typeof target === 'object' && 'room' in target) {
-            // 선택된 room인지 확인
-            if (!selectedRooms.includes(target.room)) continue;
-
-            const trader = allTraders.find(t => t.room_name === target.room);
-            const platform = trader?.platform || getRoomPlatform(target.room);
-            const platformToInternal: Record<string, string> = {
-              'com.kakao.talk': 'kakao',
-              'com.kakao.yellowid': 'kakao_biz',
-              'com.whatsapp': 'whatsapp',
-              'com.wechat': 'wechat'
-            };
-
-            await fetch(`${getApiUrl()}/messages/send`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                room_name: target.room,
-                message: target.message,
-                platform: platformToInternal[platform] || 'kakao'
-              })
-            });
-          }
-        }
       }
 
-      // 3. 목록에서 제거
+      // 2. 목록에서 제거
       const key = getTargetKey(suggestion.id, optionIndex);
       setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
       setExpandedSuggestion(null);
