@@ -178,7 +178,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 인쿼리 수동 추가 버튼 */}
+            {/* Add Inquiry Button */}
             <Button
               variant="default"
               size="sm"
@@ -186,7 +186,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700"
             >
               <Plus className="w-4 h-4" />
-              인쿼리 추가
+              Add Inquiry
             </Button>
 
             {/* 내보내기 버튼 - 테이블 뷰에서만 표시 (왼쪽) */}

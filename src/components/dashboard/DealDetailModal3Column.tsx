@@ -13,6 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Send,
   User,
   ChevronDown,
@@ -634,9 +640,29 @@ const SellerQuoteComparisonTable = memo(() => {
 
   // 질문 메시지 생성
   const getFieldQuestion = (fieldKey: string, lang: 'ko' | 'en' = 'ko'): string => {
+    // fuel1_price: 유종명 동적 사용
+    if (fieldKey === 'fuel1_price') {
+      if (lang === 'en') {
+        return session?.fuel_type
+          ? `What is the price for ${session.fuel_type}?`
+          : 'What is the price?';
+      }
+      return session?.fuel_type
+        ? `${session.fuel_type} 가격이 어떻게 되나요?`
+        : '가격이 어떻게 되나요?';
+    }
+    // fuel2_price: 유종명 동적 사용
+    if (fieldKey === 'fuel2_price') {
+      if (lang === 'en') {
+        return session?.fuel_type2
+          ? `What is the price for ${session.fuel_type2}?`
+          : 'What is the price for the second fuel?';
+      }
+      return session?.fuel_type2
+        ? `${session.fuel_type2} 가격이 어떻게 되나요?`
+        : '가격이 어떻게 되나요?';
+    }
     const questions: Record<string, Record<string, string>> = {
-      fuel1_price: { ko: '가격이 어떻게 되나요?', en: 'What is the price?' },
-      fuel2_price: { ko: '두번째 유종 가격이 어떻게 되나요?', en: 'What is the price for the second fuel?' },
       barge_fee: { ko: '바지피가 어떻게 되나요?', en: 'What is the barge fee?' },
       earliest: { ko: '얼리 언제인가요?', en: 'When is the earliest?' }
     };
@@ -784,8 +810,7 @@ const AIAssistantColumn = memo(() => {
   const [selectedTraderRooms, setSelectedTraderRooms] = useState<Map<string, Set<string>>>(new Map());
   // 전체 트레이더 목록
   const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
-  // 커스텀 트레이더 입력
-  const [customTraderInput, setCustomTraderInput] = useState('');
+  // 커스텀 트레이더 (추가된 트레이더)
   const [customTraders, setCustomTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
 
   // 선택된 타겟 키 생성 헬퍼
@@ -846,22 +871,20 @@ const AIAssistantColumn = memo(() => {
     setSelectedTraderRooms(prev => new Map(prev).set(key, new Set()));
   };
 
-  // 커스텀 트레이더 추가 (room_name 직접 입력)
-  const addCustomTrader = (suggestionId: number, optionIndex: number) => {
-    const trimmedInput = customTraderInput.trim();
-    if (!trimmedInput) return;
+  // 트레이더 추가 (드롭다운에서 선택)
+  const addTraderFromDropdown = (suggestionId: number, optionIndex: number, selectedTrader: { room_name: string; platform: string }) => {
+    if (!selectedTrader.room_name) return;
 
-    // 이미 존재하는지 확인 (allTraders + customTraders)
-    const existsInAll = allTraders.some(t => t.room_name === trimmedInput);
-    const existsInCustom = customTraders.some(t => t.room_name === trimmedInput);
+    // 이미 customTraders에 있는지 확인
+    const existsInCustom = customTraders.some(t => t.room_name === selectedTrader.room_name);
 
-    if (!existsInAll && !existsInCustom) {
+    if (!existsInCustom) {
       // 커스텀 트레이더 목록에 추가
       const newCustomTrader = {
         id: `custom_${Date.now()}`,
-        name: trimmedInput,
-        room_name: trimmedInput,
-        platform: 'com.kakao.talk' // 기본값
+        name: selectedTrader.room_name,
+        room_name: selectedTrader.room_name,
+        platform: selectedTrader.platform
       };
       setCustomTraders(prev => [...prev, newCustomTrader]);
     }
@@ -871,13 +894,10 @@ const AIAssistantColumn = memo(() => {
     setSelectedTraderRooms(prev => {
       const newMap = new Map(prev);
       const currentSet = new Set(newMap.get(key) || []);
-      currentSet.add(trimmedInput);
+      currentSet.add(selectedTrader.room_name);
       newMap.set(key, currentSet);
       return newMap;
     });
-
-    // 입력 초기화
-    setCustomTraderInput('');
   };
 
   // 커스텀 트레이더 삭제
@@ -1377,31 +1397,48 @@ const AIAssistantColumn = memo(() => {
                             })}
                           </div>
 
-                          {/* 커스텀 트레이더 입력 */}
+                          {/* 트레이더 추가 드롭다운 */}
                           <div className="px-2 py-2 border-t border-b">
-                            <div className="flex gap-1">
-                              <Input
-                                type="text"
-                                placeholder="채팅방 이름 직접 입력..."
-                                value={customTraderInput}
-                                onChange={(e) => setCustomTraderInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    addCustomTrader(suggestion.id, selectedOptionIndex);
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full h-7 text-xs justify-between"
+                                >
+                                  <span className="text-gray-500">트레이더 선택...</span>
+                                  <Plus className="w-3 h-3 ml-2" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent className="max-h-48 overflow-y-auto w-64">
+                                {(() => {
+                                  const selectedRooms = getSelectedRoomNames(suggestion.id, selectedOptionIndex);
+                                  const customRoomNames = customTraders.map(t => t.room_name);
+                                  const availableTraders = allTraders.filter(t =>
+                                    !selectedRooms.includes(t.room_name) &&
+                                    !customRoomNames.includes(t.room_name)
+                                  );
+
+                                  if (availableTraders.length === 0) {
+                                    return (
+                                      <div className="px-2 py-2 text-xs text-gray-500 text-center">
+                                        추가할 트레이더가 없습니다
+                                      </div>
+                                    );
                                   }
-                                }}
-                                className="h-7 text-xs flex-1"
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2"
-                                onClick={() => addCustomTrader(suggestion.id, selectedOptionIndex)}
-                              >
-                                <Plus className="w-3 h-3" />
-                              </Button>
-                            </div>
+
+                                  return availableTraders.map((trader) => (
+                                    <DropdownMenuItem
+                                      key={trader.id}
+                                      onClick={() => addTraderFromDropdown(suggestion.id, selectedOptionIndex, trader)}
+                                      className="text-xs cursor-pointer"
+                                    >
+                                      {trader.room_name}
+                                    </DropdownMenuItem>
+                                  ));
+                                })()}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
 
                           {/* 선택 카운터 */}
