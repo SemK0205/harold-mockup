@@ -774,6 +774,7 @@ export interface DealScoreboard {
   session_id: string;
   customer_room_name: string;
   vessel_name: string | null;
+  imo: string | null;
   port: string | null;
   fuel_type: string | null;
   quantity: string | null;
