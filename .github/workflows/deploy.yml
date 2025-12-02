@@ -24,3 +24,17 @@ jobs:
             npm ci
             npm run build
             pm2 restart harold-web || pm2 start npm --name "harold-web" -- start
+
+            # 헬스체크 - 프론트엔드 서버가 정상 작동하는지 확인
+            echo "Running health check..."
+            sleep 5
+            for i in 1 2 3 4 5; do
+              if curl -sf http://localhost:49234 > /dev/null 2>&1; then
+                echo "Health check passed!"
+                exit 0
+              fi
+              echo "Health check attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
+            echo "Health check failed after 5 attempts"
+            exit 1
