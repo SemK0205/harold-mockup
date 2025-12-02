@@ -23,7 +23,9 @@ jobs:
             grep -q "NEXT_PUBLIC_API_URL" .env.production.local || echo "NEXT_PUBLIC_API_URL=https://api.harold.seanergyp.com" >> .env.production.local
             npm ci
             npm run build
-            pm2 restart harold-web || pm2 start npm --name "harold-web" -- start
+            pm2 delete harold-web || true
+            pm2 start npm --name "harold-web" -- start -- -p 49234
+            pm2 save
 
       - name: Health check
         uses: appleboy/ssh-action@v1.0.3
