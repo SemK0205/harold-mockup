@@ -1107,7 +1107,10 @@ const AIAssistantColumn = memo(() => {
 
   // Price Trends 관련 상태
   const [priceTrendPeriod, setPriceTrendPeriod] = useState<"3m" | "6m" | "1y">("3m");
-  const [priceTrendData, setPriceTrendData] = useState<Array<{date: string; avg_price: number | null; min_price: number | null; max_price: number | null; count: number}>>([]);
+  const [priceTrendData, setPriceTrendData] = useState<Array<{
+    fuel_type: string;
+    trends: Array<{date: string; avg_price: number | null; min_price: number | null; max_price: number | null; count: number}>;
+  }>>([]);
   const [priceTrendLoading, setPriceTrendLoading] = useState(false);
 
   // 수동 리마인더 발송 상태 (트레이더별 로딩 상태)
@@ -1132,18 +1135,24 @@ const AIAssistantColumn = memo(() => {
     fetchAllTraders();
   }, []);
 
-  // Price Trends 데이터 가져오기
+  // Price Trends 데이터 가져오기 (fuel_type2도 함께 조회)
   const fetchPriceTrends = async (period: "3m" | "6m" | "1y") => {
     if (!session?.port || !session?.fuel_type) return;
 
     setPriceTrendLoading(true);
     try {
-      const response = await fetch(
-        `${getApiUrl()}/api/price-trends?port=${encodeURIComponent(session.port)}&fuel_type=${encodeURIComponent(session.fuel_type)}&period=${period}`
-      );
+      let url = `${getApiUrl()}/api/price-trends?port=${encodeURIComponent(session.port)}&fuel_type=${encodeURIComponent(session.fuel_type)}&period=${period}`;
+
+      // fuel_type2가 있으면 함께 조회
+      if (session.fuel_type2) {
+        url += `&fuel_type2=${encodeURIComponent(session.fuel_type2)}`;
+      }
+
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        setPriceTrendData(data.trends || []);
+        // 새로운 형식 (fuel_types 배열) 사용
+        setPriceTrendData(data.fuel_types || []);
       }
     } catch (error) {
       console.error('Failed to fetch price trends:', error);
@@ -1158,7 +1167,7 @@ const AIAssistantColumn = memo(() => {
     if (activeTab === 'price-trends' && session?.port && session?.fuel_type) {
       fetchPriceTrends(priceTrendPeriod);
     }
-  }, [activeTab, priceTrendPeriod, session?.port, session?.fuel_type]);
+  }, [activeTab, priceTrendPeriod, session?.port, session?.fuel_type, session?.fuel_type2]);
 
   // 수동 리마인더 발송
   const sendReminder = async (traderRoomName: string, language: string = "ko") => {
@@ -1821,75 +1830,89 @@ const AIAssistantColumn = memo(() => {
                     ))}
                   </div>
                   <span className="text-xs text-gray-500 ml-2">
-                    {session.port} / {session.fuel_type}
+                    {session.port} / {session.fuel_type}{session.fuel_type2 ? ` + ${session.fuel_type2}` : ''}
                   </span>
                 </div>
 
-                {/* Chart */}
-                <div className="border rounded-lg p-3 bg-white">
-                  {priceTrendLoading ? (
-                    <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
-                      Loading...
-                    </div>
-                  ) : priceTrendData.length > 0 ? (
-                    <div className="h-48">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={priceTrendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                          <XAxis
-                            dataKey="date"
-                            tick={{ fontSize: 10 }}
-                            tickFormatter={(value) => value.substring(5)} // "2025-01" → "01"
-                          />
-                          <YAxis
-                            tick={{ fontSize: 10 }}
-                            domain={['auto', 'auto']}
-                            tickFormatter={(value) => `$${value}`}
-                          />
-                          <Tooltip
-                            formatter={(value: number) => [`$${value?.toFixed(2)}`, 'Avg Price']}
-                            labelFormatter={(label) => `Month: ${label}`}
-                            contentStyle={{ fontSize: 12 }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="avg_price"
-                            stroke="#22c55e"
-                            strokeWidth={2}
-                            dot={{ fill: '#22c55e', r: 3 }}
-                            activeDot={{ r: 5 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
-                      No price data available for this port/fuel combination
-                    </div>
-                  )}
-                </div>
-
-                {/* Summary Stats */}
-                {priceTrendData.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="bg-gray-50 rounded p-2 text-center">
-                      <div className="text-gray-500">Latest</div>
-                      <div className="font-medium">
-                        ${priceTrendData[priceTrendData.length - 1]?.avg_price?.toFixed(2) || '-'}
+                {/* Charts - 유종별로 표시 */}
+                {priceTrendLoading ? (
+                  <div className="h-48 flex items-center justify-center text-gray-500 text-sm border rounded-lg">
+                    Loading...
+                  </div>
+                ) : priceTrendData.length > 0 ? (
+                  <div className="space-y-4">
+                    {priceTrendData.map((fuelData, idx) => (
+                      <div key={fuelData.fuel_type} className="border rounded-lg p-3 bg-white">
+                        <div className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-2">
+                          <span className={`w-3 h-3 rounded-full ${idx === 0 ? 'bg-green-500' : 'bg-blue-500'}`}></span>
+                          {fuelData.fuel_type}
+                          <span className="text-gray-400">({fuelData.trends.length} months)</span>
+                        </div>
+                        {fuelData.trends.length > 0 ? (
+                          <>
+                            <div className="h-36">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={fuelData.trends} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                  <XAxis
+                                    dataKey="date"
+                                    tick={{ fontSize: 10 }}
+                                    tickFormatter={(value) => value.substring(5)}
+                                  />
+                                  <YAxis
+                                    tick={{ fontSize: 10 }}
+                                    domain={['auto', 'auto']}
+                                    tickFormatter={(value) => `$${value}`}
+                                  />
+                                  <Tooltip
+                                    formatter={(value: number) => [`$${value?.toFixed(2)}`, 'Avg Price']}
+                                    labelFormatter={(label) => `Month: ${label}`}
+                                    contentStyle={{ fontSize: 12 }}
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey="avg_price"
+                                    stroke={idx === 0 ? "#22c55e" : "#3b82f6"}
+                                    strokeWidth={2}
+                                    dot={{ fill: idx === 0 ? '#22c55e' : '#3b82f6', r: 3 }}
+                                    activeDot={{ r: 5 }}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                            {/* Summary Stats */}
+                            <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+                              <div className="bg-gray-50 rounded p-1.5 text-center">
+                                <div className="text-gray-500">Latest</div>
+                                <div className="font-medium">
+                                  ${fuelData.trends[fuelData.trends.length - 1]?.avg_price?.toFixed(2) || '-'}
+                                </div>
+                              </div>
+                              <div className="bg-gray-50 rounded p-1.5 text-center">
+                                <div className="text-gray-500">Min</div>
+                                <div className="font-medium">
+                                  ${Math.min(...fuelData.trends.filter(d => d.avg_price).map(d => d.avg_price!)).toFixed(2) || '-'}
+                                </div>
+                              </div>
+                              <div className="bg-gray-50 rounded p-1.5 text-center">
+                                <div className="text-gray-500">Max</div>
+                                <div className="font-medium">
+                                  ${Math.max(...fuelData.trends.filter(d => d.avg_price).map(d => d.avg_price!)).toFixed(2) || '-'}
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="h-20 flex items-center justify-center text-gray-400 text-xs">
+                            No data for {fuelData.fuel_type}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <div className="bg-gray-50 rounded p-2 text-center">
-                      <div className="text-gray-500">Min</div>
-                      <div className="font-medium">
-                        ${Math.min(...priceTrendData.filter(d => d.avg_price).map(d => d.avg_price!)).toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded p-2 text-center">
-                      <div className="text-gray-500">Max</div>
-                      <div className="font-medium">
-                        ${Math.max(...priceTrendData.filter(d => d.avg_price).map(d => d.avg_price!)).toFixed(2)}
-                      </div>
-                    </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-gray-500 text-sm border rounded-lg">
+                    No price data available for this port/fuel combination
                   </div>
                 )}
               </div>
