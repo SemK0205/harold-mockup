@@ -124,6 +124,7 @@ export default function DashboardPage() {
       port: deal.port,
       fuel_type: deal.fuel_type,
       vessel_name: deal.vessel_name,
+      imo: deal.imo || null,
       quantity: deal.quantity,
       fuel_type2: deal.fuel_type2,
       quantity2: deal.quantity2,
