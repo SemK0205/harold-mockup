@@ -426,9 +426,9 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
             port: editValues.port || undefined,
             delivery_date: editValues.eta || undefined,
             fuel_type: editValues.fuel1 || undefined,
-            quantity: editValues.qty1 ? parseFloat(editValues.qty1) : undefined,
+            quantity: editValues.qty1 || undefined,
             fuel_type2: editValues.fuel2 || undefined,
-            quantity2: editValues.qty2 ? parseFloat(editValues.qty2) : undefined,
+            quantity2: editValues.qty2 || undefined,
           });
         }
         setIsEditing(false);
@@ -762,11 +762,11 @@ const SellerQuoteComparisonTable = memo(() => {
 
       if (response.ok) {
         const currentContexts = storeSellerContexts || {};
-        const updatedContexts = {
+        const updatedContexts: Record<string, SellerContext> = {
           ...currentContexts,
-          [newSellerName.trim()]: { status: 'waiting_quote', quote: {} }
+          [newSellerName.trim()]: { status: 'waiting_quote' as SellerStatus, quote: {} }
         };
-        updateSellerContexts(session.session_id, updatedContexts);
+        setSellerContexts(session.session_id, updatedContexts);
         addSellerTab(newSellerName.trim());
         setNewSellerName('');
         setShowAddSeller(false);
