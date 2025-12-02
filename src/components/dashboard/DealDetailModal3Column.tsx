@@ -718,16 +718,7 @@ const SellerQuoteComparisonTable = memo(() => {
     return name.slice(0, 8) + '..';
   };
 
-  if (sellers.length === 0) {
-    return (
-      <div className="p-3 bg-white border rounded-lg">
-        <div className="text-xs text-gray-500 text-center py-4">
-          No sellers requested yet
-        </div>
-      </div>
-    );
-  }
-
+  // 판매처가 없어도 테이블 헤더는 유지
   return (
     <div className="bg-white border rounded-lg overflow-hidden">
       <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
@@ -737,48 +728,61 @@ const SellerQuoteComparisonTable = memo(() => {
         <table className="w-full text-[10px]">
           <thead>
             <tr className="bg-gray-50 border-b">
-              <th className="px-2 py-1.5 text-left font-medium text-gray-600 sticky left-0 bg-gray-50 min-w-[80px]">
-                Field
+              {/* x축: Supplier 열 헤더 + 필드 열들 */}
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600 sticky left-0 bg-gray-50 min-w-[100px]">
+                Supplier
               </th>
-              {sellers.map((seller) => (
+              {fields.map((field) => (
                 <th
-                  key={seller}
-                  className="px-2 py-1.5 text-center font-medium text-gray-700 min-w-[70px] max-w-[90px]"
-                  title={seller}
+                  key={field.key}
+                  className="px-2 py-1.5 text-center font-medium text-gray-700 min-w-[80px]"
                 >
-                  {shortenTraderName(seller)}
+                  {field.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {fields.map((field, rowIdx) => (
-              <tr key={field.key} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                <td className="px-2 py-1.5 font-medium text-gray-600 sticky left-0 bg-inherit border-r">
-                  {field.label}
+            {sellers.length === 0 ? (
+              <tr>
+                <td colSpan={fields.length + 1} className="px-2 py-4 text-center text-gray-500">
+                  No sellers requested yet
                 </td>
-                {sellers.map((seller) => {
-                  const value = getFieldValue(seller, field.key);
-                  const hasValue = !!value;
-
-                  return (
-                    <td
-                      key={`${seller}-${field.key}`}
-                      onClick={() => !hasValue && handleCellClick(seller, field.key)}
-                      title={!hasValue ? `Click to ask: "${getFieldQuestion(field.key)}"` : value || ''}
-                      className={cn(
-                        "px-2 py-1.5 text-center",
-                        hasValue
-                          ? "text-green-700 font-medium"
-                          : "text-gray-400 cursor-pointer hover:bg-red-50"
-                      )}
-                    >
-                      {hasValue ? value : '—'}
-                    </td>
-                  );
-                })}
               </tr>
-            ))}
+            ) : (
+              sellers.map((seller, rowIdx) => (
+                <tr key={seller} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                  {/* y축: 판매처 이름 */}
+                  <td
+                    className="px-2 py-1.5 font-medium text-gray-700 sticky left-0 bg-inherit border-r min-w-[100px]"
+                    title={seller}
+                  >
+                    {shortenTraderName(seller)}
+                  </td>
+                  {/* 각 필드 값 */}
+                  {fields.map((field) => {
+                    const value = getFieldValue(seller, field.key);
+                    const hasValue = !!value;
+
+                    return (
+                      <td
+                        key={`${seller}-${field.key}`}
+                        onClick={() => !hasValue && handleCellClick(seller, field.key)}
+                        title={!hasValue ? `Click to ask: "${getFieldQuestion(field.key)}"` : value || ''}
+                        className={cn(
+                          "px-2 py-1.5 text-center",
+                          hasValue
+                            ? "text-green-700 font-medium"
+                            : "text-gray-400 cursor-pointer hover:bg-red-50"
+                        )}
+                      >
+                        {hasValue ? value : '—'}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
