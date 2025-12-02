@@ -1100,9 +1100,9 @@ const AIAssistantColumn = memo(() => {
   // 트레이더 선택 상태 관리 (suggestionId-optionIndex -> Set of selected room_names)
   const [selectedTraderRooms, setSelectedTraderRooms] = useState<Map<string, Set<string>>>(new Map());
   // 전체 트레이더 목록
-  const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
+  const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string; language?: string}>>([]);
   // 커스텀 트레이더 (추가된 트레이더)
-  const [customTraders, setCustomTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
+  const [customTraders, setCustomTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string; language?: string}>>([]);
 
   // Price Trends 관련 상태
   const [priceTrendsExpanded, setPriceTrendsExpanded] = useState(false);
@@ -1179,10 +1179,8 @@ const AIAssistantColumn = memo(() => {
         })
       });
       if (response.ok) {
-        // 성공 시 세션 새로고침 (last_reminder_at 업데이트 반영)
-        if (onSessionUpdate) {
-          onSessionUpdate();
-        }
+        // 성공 - last_reminder_at은 SSE를 통해 자동 업데이트됨
+        console.log('[Reminder] Sent successfully to', traderRoomName);
       }
     } catch (error) {
       console.error('Failed to send reminder:', error);
@@ -1594,7 +1592,12 @@ const AIAssistantColumn = memo(() => {
               </div>
             </div>
             {inquirySenderExpanded && aiSuggestions.length > 0 ? (
-              aiSuggestions.map((suggestion) => (
+              (() => {
+                // 최신 suggestion 1개만 사용 (여러 개가 쌓여도 마지막 것만 표시)
+                const suggestion = aiSuggestions[aiSuggestions.length - 1];
+                const recommendedTargets = suggestion.suggestions[selectedOptionIndex]?.targets || [];
+
+                return (
                 <div key={suggestion.id} className="border rounded-lg overflow-hidden">
                   {/* Inquiry Sender 내용 - 바로 표시 */}
                   <div className="p-3 bg-gray-50 space-y-3">
@@ -1623,18 +1626,14 @@ const AIAssistantColumn = memo(() => {
                           {/* 전체 트레이더 목록 - 추천 트레이더가 상단에 오도록 정렬 */}
                           <div className="p-2 space-y-1">
                             {[...allTraders].sort((a, b) => {
-                              const targets = suggestion.suggestions[selectedOptionIndex]?.targets || [];
-                              const aRecommended = isRecommendedTrader(targets, a.room_name);
-                              const bRecommended = isRecommendedTrader(targets, b.room_name);
+                              const aRecommended = isRecommendedTrader(recommendedTargets, a.room_name);
+                              const bRecommended = isRecommendedTrader(recommendedTargets, b.room_name);
                               if (aRecommended && !bRecommended) return -1;
                               if (!aRecommended && bRecommended) return 1;
                               return 0;
                             }).map((trader) => {
                               const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
-                              const isRecommended = isRecommendedTrader(
-                                suggestion.suggestions[selectedOptionIndex]?.targets || [],
-                                trader.room_name
-                              );
+                              const isRecommended = isRecommendedTrader(recommendedTargets, trader.room_name);
                               // seller_contexts에서 해당 트레이더 정보 조회
                               const sellerContext = getSellerContext(trader.room_name);
                               const isSent = !!sellerContext?.contacted_at;
@@ -1831,7 +1830,8 @@ const AIAssistantColumn = memo(() => {
                       </div>
                     </div>
                 </div>
-              ))
+                );
+              })()
             ) : inquirySenderExpanded ? (
               <div className="text-center py-8 text-gray-500 text-sm">
                 No inquiry session available
