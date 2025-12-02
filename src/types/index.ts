@@ -124,6 +124,7 @@ export interface OriginalMessage {
 
 export interface TradingContext {
   vessel_name: string | null;
+  imo: string | null;
   port: string | null;
   delivery_date: string | null;
   eta: string | null;  // alias for delivery_date (API returns as eta)
