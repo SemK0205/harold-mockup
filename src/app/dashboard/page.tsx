@@ -41,12 +41,13 @@ export default function DashboardPage() {
 
   // 알림 권한 상태 (클라이언트에서만 렌더링)
   const [isMounted, setIsMounted] = useState(false);
-  const { notificationPermission, requestNotificationPermission } = useNotificationStore();
+  const { notificationPermission, requestNotificationPermission, initNotificationPermission } = useNotificationStore();
 
-  // 클라이언트 마운트 확인
+  // 클라이언트 마운트 확인 및 알림 권한 상태 동기화
   useEffect(() => {
     setIsMounted(true);
-  }, []);
+    initNotificationPermission();
+  }, [initNotificationPermission]);
 
   // 통계 데이터 조회
   const { data: statisticsData, isLoading: statisticsLoading } = useQuery({

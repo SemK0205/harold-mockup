@@ -22,10 +22,12 @@ interface UseSSEManagerReturn {
 
 export function useSSEManager({
   roomName,
-  sessionId,
+  sessionId: _sessionId,
   onMessage,
   enabled = true
 }: UseSSEManagerOptions): UseSSEManagerReturn {
+  // sessionId is available via _sessionId but currently unused
+  void _sessionId;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const processedIds = useRef<Set<number>>(new Set());

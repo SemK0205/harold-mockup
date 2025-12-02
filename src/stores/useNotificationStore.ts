@@ -28,6 +28,7 @@ interface NotificationStore {
   isNewDeal: (sessionId: string) => boolean
 
   // 브라우저 알림
+  initNotificationPermission: () => void // 클라이언트 마운트 시 권한 상태 동기화
   requestNotificationPermission: () => Promise<void>
   showNotification: (title: string, options?: NotificationOptions) => void
 
@@ -60,6 +61,19 @@ const useNotificationStore = create<NotificationStore>()(
           // (knownDealIds에 있으면서 viewedDeals에 없으면 = 새로 추가된 딜)
           // (knownDealIds에 없으면 = 아직 초기화 안됨, NEW 표시 안함)
           return state.knownDealIds.has(sessionId) && !state.viewedDeals.has(sessionId)
+        },
+
+        initNotificationPermission: () => {
+          // 클라이언트에서만 실행
+          if (typeof window === 'undefined') return
+
+          if (typeof Notification === 'undefined') {
+            set({ notificationPermission: 'unsupported' })
+            return
+          }
+
+          // 브라우저의 현재 권한 상태를 동기화
+          set({ notificationPermission: Notification.permission })
         },
 
         requestNotificationPermission: async () => {

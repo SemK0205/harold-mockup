@@ -7,7 +7,6 @@
 
 import { useState, useMemo } from "react";
 import { DealScoreboard } from "@/types";
-import { Badge } from "@/components/ui/badge";
 import {
   Clock,
   FileText,
@@ -121,7 +120,6 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
     }
 
     // Time range filter
-    const now = new Date();
     const getStartDate = () => {
       switch (timeRange) {
         case "today":

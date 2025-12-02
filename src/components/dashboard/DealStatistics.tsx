@@ -5,7 +5,6 @@
 
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { DealStatistics as DealStatisticsType } from "@/types";
 
 interface DealStatisticsProps {

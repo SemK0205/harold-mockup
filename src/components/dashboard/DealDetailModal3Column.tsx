@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState, useCallback, useEffect, memo, useRef } from "react";
+import { useState, useEffect, memo, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -66,13 +66,16 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
 }
 
 // Inner Content Component
-function DealDetailModalContent({ onClose }: { onClose: () => void }) {
+function DealDetailModalContent({ onClose: _onClose }: { onClose: () => void }) {
   const {
     session,
     showAIPanel,
     setShowAIPanel,
     setRoomPlatforms
   } = useDealModal();
+
+  // onClose is available via _onClose but currently unused
+  void _onClose;
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -735,7 +738,6 @@ const AIAssistantColumn = memo(() => {
     aiSuggestions,
     setAiSuggestions,
     selectedSuggestions,
-    toggleSuggestion,
     setFullContextCompletion,
     setShowAIPanel,
     getRoomPlatform,
@@ -1479,7 +1481,6 @@ const SellerChatsColumn = memo(() => {
     setActiveSellerTab,
     sellerTabs,
     addSellerTab,
-    removeSellerTab,
     sellerMessages,
     setSellerMessagesForTrader,
     addSellerMessage,
@@ -1541,7 +1542,7 @@ const SellerChatsColumn = memo(() => {
 
     try {
       // 필드에 따라 적절한 업데이트 구성
-      let updatePayload: {
+      const updatePayload: {
         status?: string;
         quote?: Record<string, string>;
         no_offer_reason?: string;
@@ -2125,7 +2126,7 @@ const SellerChatRoom = memo(({
                 const price3 = quote?.fuel3_price;
                 const barge = quote?.barge_fee;
 
-                let prices: string[] = [];
+                const prices: string[] = [];
                 if (price1) prices.push((parseFloat(price1) + 2).toFixed(0));
                 if (price2) prices.push((parseFloat(price2) + 2).toFixed(0));
                 if (price3) prices.push((parseFloat(price3) + 2).toFixed(0));

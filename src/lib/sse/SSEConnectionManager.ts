@@ -10,11 +10,6 @@ import { getApiUrl } from '@/lib/api/client';
 type MessageListener = (message: ChatMessage) => void;
 type ConnectionListener = (connected: boolean) => void;
 
-interface SubscriptionKey {
-  sessionId: string;
-  roomName?: string;
-}
-
 class SSEConnectionManager {
   private static instance: SSEConnectionManager;
   private eventSource: EventSource | null = null;

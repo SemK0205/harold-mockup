@@ -123,3 +123,13 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* 알림 뱃지 크기 커졌다 작아지는 애니메이션 */
+@keyframes scale-ping {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
