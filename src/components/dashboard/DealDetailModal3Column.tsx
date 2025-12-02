@@ -1092,7 +1092,8 @@ const AIAssistantColumn = memo(() => {
   };
 
   const [showFullContext, setShowFullContext] = useState(false); // 임시로 숨김 - Seller Quote Matrix로 대체됨
-  const [inquirySenderExpanded, setInquirySenderExpanded] = useState(true); // Inquiry Sender 접기/펼치기
+  // 탭 상태: 'inquiry' | 'price-trends'
+  const [activeTab, setActiveTab] = useState<'inquiry' | 'price-trends'>('inquiry');
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<string>('');
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(0);
@@ -1105,7 +1106,6 @@ const AIAssistantColumn = memo(() => {
   const [customTraders, setCustomTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string; language?: string}>>([]);
 
   // Price Trends 관련 상태
-  const [priceTrendsExpanded, setPriceTrendsExpanded] = useState(false);
   const [priceTrendPeriod, setPriceTrendPeriod] = useState<"3m" | "6m" | "1y">("3m");
   const [priceTrendData, setPriceTrendData] = useState<Array<{date: string; avg_price: number | null; min_price: number | null; max_price: number | null; count: number}>>([]);
   const [priceTrendLoading, setPriceTrendLoading] = useState(false);
@@ -1153,12 +1153,12 @@ const AIAssistantColumn = memo(() => {
     }
   };
 
-  // Price Trends 섹션이 펼쳐지면 데이터 로드
+  // Price Trends 탭이 선택되면 데이터 로드
   useEffect(() => {
-    if (priceTrendsExpanded && session?.port && session?.fuel_type) {
+    if (activeTab === 'price-trends' && session?.port && session?.fuel_type) {
       fetchPriceTrends(priceTrendPeriod);
     }
-  }, [priceTrendsExpanded, priceTrendPeriod, session?.port, session?.fuel_type]);
+  }, [activeTab, priceTrendPeriod, session?.port, session?.fuel_type]);
 
   // 수동 리마인더 발송
   const sendReminder = async (traderRoomName: string, language: string = "ko") => {
@@ -1567,31 +1567,39 @@ const AIAssistantColumn = memo(() => {
             </div>
           )}
 
-          {/* Inquiry Sender (구 AI Suggestions) */}
+          {/* Inquiry Sender & Price Trends 탭 */}
           <div className="space-y-3">
-            <div
-              className={cn(
-                "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors border",
-                inquirySenderExpanded
-                  ? "bg-gray-100 hover:bg-gray-200 border-gray-200"
-                  : "bg-blue-50 hover:bg-blue-100 border-blue-200"
-              )}
-              onClick={() => setInquirySenderExpanded(!inquirySenderExpanded)}
-            >
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-medium">Inquiry Sender</h4>
-                {!inquirySenderExpanded && (
-                  <span className="text-xs text-blue-600">Click to expand</span>
+            {/* 탭 헤더 */}
+            <div className="flex border-b">
+              <button
+                onClick={() => setActiveTab('inquiry')}
+                className={cn(
+                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2",
+                  activeTab === 'inquiry'
+                    ? "text-blue-600 border-blue-500 bg-blue-50"
+                    : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
                 )}
-              </div>
-              <div className={cn(
-                "p-1 rounded transition-colors",
-                inquirySenderExpanded ? "hover:bg-gray-300" : "bg-blue-100"
-              )}>
-                {inquirySenderExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 text-blue-600" />}
-              </div>
+              >
+                Inquiry Sender
+              </button>
+              {session?.port && session?.fuel_type && (
+                <button
+                  onClick={() => setActiveTab('price-trends')}
+                  className={cn(
+                    "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 flex items-center justify-center gap-1",
+                    activeTab === 'price-trends'
+                      ? "text-green-600 border-green-500 bg-green-50"
+                      : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
+                  )}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Price Trends
+                </button>
+              )}
             </div>
-            {inquirySenderExpanded && (
+
+            {/* Inquiry Sender 탭 내용 */}
+            {activeTab === 'inquiry' && (
                 <div className="border rounded-lg overflow-hidden">
                   {/* Inquiry Sender 내용 */}
                   <div className="p-3 bg-gray-50 space-y-3">
@@ -1789,39 +1797,10 @@ const AIAssistantColumn = memo(() => {
                     </div>
                 </div>
             )}
-          </div>
 
-          {/* Price Trends Section */}
-          {session?.port && session?.fuel_type && (
-          <div className="space-y-3">
-            {/* Price Trends Header */}
-            <div
-              className={cn(
-                "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors border",
-                priceTrendsExpanded
-                  ? "bg-gray-100 hover:bg-gray-200 border-gray-200"
-                  : "bg-green-50 hover:bg-green-100 border-green-200"
-              )}
-              onClick={() => setPriceTrendsExpanded(!priceTrendsExpanded)}
-            >
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-green-600" />
-                <h4 className="text-sm font-medium">Price Trends</h4>
-                {!priceTrendsExpanded && (
-                  <span className="text-xs text-green-600 ml-2">Click to expand</span>
-                )}
-              </div>
-              <div className={cn(
-                "p-1 rounded",
-                priceTrendsExpanded ? "hover:bg-gray-300" : "bg-green-100"
-              )}>
-                {priceTrendsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 text-green-600" />}
-              </div>
-            </div>
-
-            {/* Price Trends Content */}
-            {priceTrendsExpanded && (
-              <div className="mt-3 space-y-3">
+            {/* Price Trends 탭 내용 */}
+            {activeTab === 'price-trends' && session?.port && session?.fuel_type && (
+              <div className="space-y-3 border rounded-lg p-3">
                 {/* Period Selection */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-600">Period:</span>
@@ -1916,7 +1895,6 @@ const AIAssistantColumn = memo(() => {
               </div>
             )}
           </div>
-          )}
 
         </div>
       </ScrollArea>
