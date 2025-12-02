@@ -645,7 +645,13 @@ BuyerRequiredFullContext.displayName = 'BuyerRequiredFullContext';
 
 // Seller Quote Comparison Table (Excel-style)
 const SellerQuoteComparisonTable = memo(() => {
-  const { session, getRoomPlatform, addSellerMessage } = useDealModal();
+  const { session, getRoomPlatform, addSellerMessage, addSellerTab } = useDealModal();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, Record<string, string>>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [showAddSeller, setShowAddSeller] = useState(false);
+  const [newSellerName, setNewSellerName] = useState('');
+  const setSellerContexts = useDealStore((state) => state.setSellerContexts);
 
   // 전역 store에서 seller_contexts 가져오기
   const sessionId = session?.session_id || '';
@@ -673,6 +679,101 @@ const SellerQuoteComparisonTable = memo(() => {
   // 판매자 컨텍스트 가져오기 (store 우선, 없으면 session)
   const getSellerContext = (trader: string): SellerContext | undefined => {
     return storeSellerContexts?.[trader] || session?.seller_contexts?.[trader];
+  };
+
+  // 편집 모드 시작
+  const startEditing = () => {
+    const values: Record<string, Record<string, string>> = {};
+    sellers.forEach(seller => {
+      const context = getSellerContext(seller);
+      values[seller] = {
+        fuel1_price: context?.quote?.fuel1_price || '',
+        fuel2_price: context?.quote?.fuel2_price || '',
+        barge_fee: context?.quote?.barge_fee || '',
+        earliest: context?.earliest || '',
+        term: context?.quote?.term || '',
+      };
+    });
+    setEditValues(values);
+    setIsEditing(true);
+  };
+
+  // 저장 처리
+  const handleSave = async () => {
+    if (!session) return;
+    setIsSaving(true);
+
+    try {
+      for (const seller of sellers) {
+        const values = editValues[seller];
+        if (!values) continue;
+
+        const response = await fetch(`${getApiUrl()}/sessions/${session.session_id}/seller-context/${encodeURIComponent(seller)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quote: {
+              fuel1_price: values.fuel1_price || null,
+              fuel2_price: values.fuel2_price || null,
+              barge_fee: values.barge_fee || null,
+              term: values.term || null,
+            },
+            earliest: values.earliest || null,
+          })
+        });
+
+        if (response.ok) {
+          const currentContexts = storeSellerContexts || {};
+          const updatedContexts = {
+            ...currentContexts,
+            [seller]: {
+              ...currentContexts[seller],
+              quote: {
+                ...currentContexts[seller]?.quote,
+                fuel1_price: values.fuel1_price || undefined,
+                fuel2_price: values.fuel2_price || undefined,
+                barge_fee: values.barge_fee || undefined,
+                term: values.term || undefined,
+              },
+              earliest: values.earliest || undefined,
+            }
+          };
+          setSellerContexts(session.session_id, updatedContexts);
+        }
+      }
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update seller contexts:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 새 셀러 추가
+  const handleAddSeller = async () => {
+    if (!session || !newSellerName.trim()) return;
+
+    try {
+      const response = await fetch(`${getApiUrl()}/sessions/${session.session_id}/seller-context/${encodeURIComponent(newSellerName.trim())}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'waiting_quote' })
+      });
+
+      if (response.ok) {
+        const currentContexts = storeSellerContexts || {};
+        const updatedContexts = {
+          ...currentContexts,
+          [newSellerName.trim()]: { status: 'waiting_quote', quote: {} }
+        };
+        updateSellerContexts(session.session_id, updatedContexts);
+        addSellerTab(newSellerName.trim());
+        setNewSellerName('');
+        setShowAddSeller(false);
+      }
+    } catch (error) {
+      console.error('Failed to add seller:', error);
+    }
   };
 
   // 필드 값 가져오기
@@ -742,7 +843,9 @@ const SellerQuoteComparisonTable = memo(() => {
 
   // 빈 셀 클릭 시 해당 판매자에게 질문 전송
   const handleCellClick = async (trader: string, fieldKey: string) => {
-    const question = getFieldQuestion(fieldKey); // TODO: 트레이더 언어 설정에 따라 lang 파라미터 추가
+    if (isEditing) return;
+
+    const question = getFieldQuestion(fieldKey);
     if (!question) return;
 
     const platform = getRoomPlatform(trader);
@@ -792,9 +895,74 @@ const SellerQuoteComparisonTable = memo(() => {
   // 판매처가 없어도 테이블 헤더는 유지
   return (
     <div className="bg-white border rounded-lg overflow-hidden">
-      <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b">
+      <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b flex items-center justify-between">
         <span className="text-xs font-semibold text-indigo-700">Seller Quote Matrix</span>
+        <div className="flex items-center gap-1">
+          {isEditing ? (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="p-1 rounded hover:bg-green-100 text-green-600 disabled:opacity-50"
+                title="Save"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="p-1 rounded hover:bg-red-100 text-red-600"
+                title="Cancel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setShowAddSeller(true)}
+                className="p-1 rounded hover:bg-indigo-100 text-indigo-600"
+                title="Add Seller"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={startEditing}
+                className="p-1 rounded hover:bg-indigo-100 text-indigo-600"
+                title="Edit quotes"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* 셀러 추가 입력창 */}
+      {showAddSeller && (
+        <div className="px-3 py-2 bg-indigo-50 border-b flex items-center gap-2">
+          <input
+            type="text"
+            value={newSellerName}
+            onChange={(e) => setNewSellerName(e.target.value)}
+            placeholder="Enter seller name..."
+            className="flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            onKeyDown={(e) => e.key === 'Enter' && handleAddSeller()}
+          />
+          <button
+            onClick={handleAddSeller}
+            className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => { setShowAddSeller(false); setNewSellerName(''); }}
+            className="p-1 text-gray-500 hover:text-gray-700"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-[10px]">
           <thead>
@@ -835,6 +1003,26 @@ const SellerQuoteComparisonTable = memo(() => {
                     const value = getFieldValue(seller, field.key);
                     const hasValue = !!value;
                     const isCalculated = (field as { isCalculated?: boolean }).isCalculated;
+
+                    if (isEditing && !isCalculated) {
+                      return (
+                        <td key={`${seller}-${field.key}`} className="px-1 py-0.5">
+                          <input
+                            type="text"
+                            value={editValues[seller]?.[field.key] || ''}
+                            onChange={(e) => setEditValues(prev => ({
+                              ...prev,
+                              [seller]: {
+                                ...prev[seller],
+                                [field.key]: e.target.value
+                              }
+                            }))}
+                            className="w-full px-1 py-0.5 text-[10px] text-center border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="—"
+                          />
+                        </td>
+                      );
+                    }
 
                     return (
                       <td
@@ -879,6 +1067,7 @@ const AIAssistantColumn = memo(() => {
   } = useDealModal();
 
   const [showFullContext, setShowFullContext] = useState(false); // 임시로 숨김 - Seller Quote Matrix로 대체됨
+  const [inquirySenderExpanded, setInquirySenderExpanded] = useState(true); // Inquiry Sender 접기/펼치기
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<string>('');
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(0);
@@ -1183,17 +1372,17 @@ const AIAssistantColumn = memo(() => {
         addBuyerMessage(chatMessage);
       }
 
-      // 2. 목록에서 제거
+      // Inquiry Sender UI는 전송 후에도 유지 (사라지지 않음)
+      // 선택된 트레이더만 클리어하여 추가 전송 가능하게 함
       const key = getTargetKey(suggestion.id, optionIndex);
-      setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
-      setExpandedSuggestion(null);
-      setEditingMessage('');
-      // 선택 상태도 클리어
       setSelectedTraderRooms(prev => {
         const newMap = new Map(prev);
         newMap.delete(key);
         return newMap;
       });
+
+      // 메시지 전송 성공 알림 (선택사항)
+      console.log(`[Inquiry Sender] Message sent to ${selectedRooms.length} traders`);
 
     } catch (error) {
       console.error('Failed to approve suggestion:', error);
@@ -1202,26 +1391,8 @@ const AIAssistantColumn = memo(() => {
     }
   };
 
-  // 제안 거부
-  const handleRejectSuggestion = async (suggestion: AISuggestion, reason: string) => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-
-    try {
-      await fetch(`${getApiUrl()}/ai-suggestions/reject?suggestion_id=${suggestion.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason })
-      });
-
-      setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
-      setExpandedSuggestion(null);
-    } catch (error) {
-      console.error('Failed to reject suggestion:', error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  // 제안 거부 - Inquiry Sender로 변경되면서 더 이상 사용하지 않음
+  // const handleRejectSuggestion = async (suggestion: AISuggestion, reason: string) => { ... };
 
   return (
     <div className="flex flex-col h-full">
@@ -1295,86 +1466,37 @@ const AIAssistantColumn = memo(() => {
             </div>
           )}
 
-          {/* AI Suggestions */}
+          {/* Inquiry Sender (구 AI Suggestions) */}
           <div className="space-y-3">
-            <h4 className="text-sm font-medium">AI Suggestions</h4>
-            {aiSuggestions.length > 0 ? (
+            <div
+              className={cn(
+                "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors border",
+                inquirySenderExpanded
+                  ? "bg-gray-100 hover:bg-gray-200 border-gray-200"
+                  : "bg-blue-50 hover:bg-blue-100 border-blue-200"
+              )}
+              onClick={() => setInquirySenderExpanded(!inquirySenderExpanded)}
+            >
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-medium">Inquiry Sender</h4>
+                {!inquirySenderExpanded && (
+                  <span className="text-xs text-blue-600">Click to expand</span>
+                )}
+              </div>
+              <div className={cn(
+                "p-1 rounded transition-colors",
+                inquirySenderExpanded ? "hover:bg-gray-300" : "bg-blue-100"
+              )}>
+                {inquirySenderExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 text-blue-600" />}
+              </div>
+            </div>
+            {inquirySenderExpanded && aiSuggestions.length > 0 ? (
               aiSuggestions.map((suggestion) => (
                 <div key={suggestion.id} className="border rounded-lg overflow-hidden">
-                  {/* 제안 헤더 */}
-                  <div
-                    className={cn(
-                      "p-3 cursor-pointer transition-all",
-                      expandedSuggestion === suggestion.id ? "bg-blue-50" : "bg-white hover:bg-gray-50"
-                    )}
-                    onClick={() => {
-                      setExpandedSuggestion(expandedSuggestion === suggestion.id ? null : suggestion.id);
-                      setSelectedOptionIndex(0);
-                      setEditingMessage(suggestion.suggestions[0]?.message || '');
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline">{suggestion.category}</Badge>
-                      <Badge variant={suggestion.confidence > 0.8 ? 'default' : 'secondary'}>
-                        {Math.round(suggestion.confidence * 100)}%
-                      </Badge>
-                    </div>
-                    {suggestion.original_message && (
-                      <div className="text-xs text-gray-500 mt-2 bg-gray-100 p-2 rounded">
-                        <span className="font-medium">{suggestion.original_message.sender}:</span>{' '}
-                        {suggestion.original_message.message.length > 100
-                          ? suggestion.original_message.message.substring(0, 100) + '...'
-                          : suggestion.original_message.message}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 확장된 옵션 선택 UI */}
-                  {expandedSuggestion === suggestion.id && (
-                    <div className="border-t p-3 bg-gray-50 space-y-3">
-                      {/* 옵션 목록 */}
-                      <div className="space-y-2">
-                        {suggestion.suggestions.map((option, idx) => (
-                          <div
-                            key={idx}
-                            className={cn(
-                              "p-2 rounded border cursor-pointer text-xs",
-                              selectedOptionIndex === idx
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-gray-200 hover:border-gray-300 bg-white"
-                            )}
-                            onClick={() => {
-                              setSelectedOptionIndex(idx);
-                              setEditingMessage(option.message || '');
-                              // 타겟 초기화
-                              if (option.targets) {
-                                initializeTargets(suggestion.id, idx, option.targets);
-                              }
-                            }}
-                          >
-                            <div className="flex items-center gap-2">
-                              {selectedOptionIndex === idx ? (
-                                <CheckCircle2 className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                              ) : (
-                                <Circle className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              )}
-                              <span className="font-medium">{option.action}</span>
-                            </div>
-                            <div className="mt-1 text-gray-600 line-clamp-2">{option.reason}</div>
-                            {option.targets && option.targets.length > 0 && (
-                              <div className="mt-1 text-gray-500 truncate">
-                                Target: {Array.isArray(option.targets)
-                                  ? option.targets.slice(0, 3).map(t => typeof t === 'string' ? t : t.room).join(', ')
-                                  : ''}
-                                {option.targets.length > 3 && ` +${option.targets.length - 3} more`}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 트레이더 선택 UI - 전체 트레이더 목록 (send_to_suppliers 액션일 때만) */}
-                      {suggestion.suggestions[selectedOptionIndex]?.action === 'send_to_suppliers' && allTraders.length > 0 && (
+                  {/* Inquiry Sender 내용 - 바로 표시 */}
+                  <div className="p-3 bg-gray-50 space-y-3">
+                      {/* 트레이더 선택 UI - 전체 트레이더 목록 */}
+                      {allTraders.length > 0 && (
                         <div className="border rounded-lg bg-white">
                           {/* 헤더: Select Recipients + All/None 버튼 */}
                           <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
@@ -1395,9 +1517,16 @@ const AIAssistantColumn = memo(() => {
                             </div>
                           </div>
 
-                          {/* 전체 트레이더 목록 */}
+                          {/* 전체 트레이더 목록 - 추천 트레이더가 상단에 오도록 정렬 */}
                           <div className="p-2 space-y-1">
-                            {allTraders.map((trader) => {
+                            {[...allTraders].sort((a, b) => {
+                              const targets = suggestion.suggestions[selectedOptionIndex]?.targets || [];
+                              const aRecommended = isRecommendedTrader(targets, a.room_name);
+                              const bRecommended = isRecommendedTrader(targets, b.room_name);
+                              if (aRecommended && !bRecommended) return -1;
+                              if (!aRecommended && bRecommended) return 1;
+                              return 0;
+                            }).map((trader) => {
                               const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
                               const isRecommended = isRecommendedTrader(
                                 suggestion.suggestions[selectedOptionIndex]?.targets || [],
@@ -1474,7 +1603,8 @@ const AIAssistantColumn = memo(() => {
                             })}
                           </div>
 
-                          {/* 트레이더 추가 드롭다운 */}
+                          {/* 트레이더 추가 드롭다운 - 임시 비활성화 */}
+                          {false && (
                           <div className="px-2 py-2 border-t border-b">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -1517,6 +1647,7 @@ const AIAssistantColumn = memo(() => {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
+                          )}
 
                           {/* 선택 카운터 */}
                           <div className="px-3 py-2 bg-gray-50 text-xs text-gray-600">
@@ -1526,19 +1657,18 @@ const AIAssistantColumn = memo(() => {
                       )}
 
                       {/* Edit Message */}
-                      {suggestion.suggestions[selectedOptionIndex]?.message && (
-                        <div>
-                          <label className="text-xs font-medium text-gray-700">Edit Message</label>
-                          <textarea
-                            value={editingMessage}
-                            onChange={(e) => setEditingMessage(e.target.value)}
-                            className="w-full mt-1 p-2 text-xs border rounded resize-none bg-white"
-                            rows={4}
-                          />
-                        </div>
-                      )}
+                      <div>
+                        <label className="text-xs font-medium text-gray-700">Edit Message</label>
+                        <textarea
+                          value={editingMessage}
+                          onChange={(e) => setEditingMessage(e.target.value)}
+                          className="w-full mt-1 p-2 text-xs border rounded resize-none bg-white"
+                          rows={4}
+                          placeholder="메시지를 입력하세요..."
+                        />
+                      </div>
 
-                      {/* Action Buttons */}
+                      {/* Action Buttons - Reject 버튼 제거 */}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -1546,32 +1676,21 @@ const AIAssistantColumn = memo(() => {
                           onClick={() => handleApproveSuggestion(
                             suggestion,
                             selectedOptionIndex,
-                            editingMessage !== suggestion.suggestions[selectedOptionIndex]?.message
-                              ? editingMessage
-                              : undefined
+                            editingMessage
                           )}
-                          disabled={isProcessing}
+                          disabled={isProcessing || !editingMessage.trim()}
                         >
-                          {isProcessing ? 'Processing...' : 'Approve & Send'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleRejectSuggestion(suggestion, 'User rejected')}
-                          disabled={isProcessing}
-                        >
-                          Reject
+                          {isProcessing ? 'Sending...' : 'Send'}
                         </Button>
                       </div>
                     </div>
-                  )}
                 </div>
               ))
-            ) : (
+            ) : inquirySenderExpanded ? (
               <div className="text-center py-8 text-gray-500 text-sm">
-                AI is analyzing the conversation...
+                No inquiry session available
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </ScrollArea>
