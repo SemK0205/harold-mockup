@@ -1127,7 +1127,7 @@ const AIAssistantColumn = memo(() => {
 
               {showFullContext && (
                 <div className="mt-3 space-y-1">
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                  <div className="space-y-1">
                     {requirements.map((field) => {
                       const isMissing = missingFields.includes(field);
                       const value = session?.[field as keyof typeof session];
@@ -1197,7 +1197,7 @@ const AIAssistantColumn = memo(() => {
                   {expandedSuggestion === suggestion.id && (
                     <div className="border-t p-3 bg-gray-50 space-y-3">
                       {/* 옵션 목록 */}
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                      <div className="space-y-2">
                         {suggestion.suggestions.map((option, idx) => (
                           <div
                             key={idx}
@@ -1260,7 +1260,7 @@ const AIAssistantColumn = memo(() => {
                           </div>
 
                           {/* 전체 트레이더 목록 */}
-                          <div className="max-h-40 overflow-y-auto p-2 space-y-1">
+                          <div className="p-2 space-y-1">
                             {allTraders.map((trader) => {
                               const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
                               const isRecommended = isRecommendedTrader(
