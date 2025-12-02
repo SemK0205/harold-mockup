@@ -18,6 +18,7 @@ interface DealModalContextType {
   // Session Data
   session: TradingSession | null;
   setSession: (session: TradingSession | null) => void;
+  updateSession: (updates: Partial<TradingSession>) => void;
 
   // Column Management
   columns: {
@@ -185,6 +186,14 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
     });
   }, []);
 
+  // Update session fields
+  const updateSession = useCallback((updates: Partial<TradingSession>) => {
+    setSession(prev => {
+      if (!prev) return prev;
+      return { ...prev, ...updates };
+    });
+  }, []);
+
   // Add buyer message (with duplicate check)
   const addBuyerMessage = useCallback((message: ChatMessage) => {
     setBuyerMessages(prev => {
@@ -271,6 +280,7 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
   const contextValue = useMemo<DealModalContextType>(() => ({
     session,
     setSession,
+    updateSession,
     columns,
     resizeColumn,
     buyerMessages,
@@ -299,6 +309,7 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
     getRoomPlatform
   }), [
     session,
+    updateSession,
     columns,
     resizeColumn,
     buyerMessages,

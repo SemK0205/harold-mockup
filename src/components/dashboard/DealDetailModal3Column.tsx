@@ -29,7 +29,9 @@ import {
   AlertCircle,
   MessageSquare,
   Sparkles,
-  Plus
+  Plus,
+  Pencil,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -374,10 +376,73 @@ BuyerChatColumn.displayName = 'BuyerChatColumn';
 
 // Buyer Required FullContext Component
 const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | null }) => {
-  const { addBuyerMessage, getRoomPlatform } = useDealModal();
+  const { addBuyerMessage, getRoomPlatform, updateSession } = useDealModal();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
+  // 편집 모드 시작 시 현재 값 로드
+  const startEditing = () => {
+    setEditValues({
+      vessel: session?.vessel_name || '',
+      imo: session?.imo || '',
+      port: session?.port || '',
+      eta: session?.delivery_date || '',
+      fuel1: session?.fuel_type || '',
+      qty1: session?.quantity?.toString() || '',
+      fuel2: session?.fuel_type2 || '',
+      qty2: session?.quantity2?.toString() || '',
+    });
+    setIsEditing(true);
+  };
+
+  // 저장 처리
+  const handleSave = async () => {
+    if (!session) return;
+    setIsSaving(true);
+
+    try {
+      const response = await fetch(`${getApiUrl()}/sessions/${session.session_id}/fields`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vessel_name: editValues.vessel || null,
+          imo: editValues.imo || null,
+          port: editValues.port || null,
+          delivery_date: editValues.eta || null,
+          fuel_type: editValues.fuel1 || null,
+          quantity: editValues.qty1 ? parseFloat(editValues.qty1) : null,
+          fuel_type2: editValues.fuel2 || null,
+          quantity2: editValues.qty2 ? parseFloat(editValues.qty2) : null,
+        })
+      });
+
+      if (response.ok) {
+        // 로컬 상태 업데이트
+        if (updateSession) {
+          updateSession({
+            vessel_name: editValues.vessel || undefined,
+            imo: editValues.imo || undefined,
+            port: editValues.port || undefined,
+            delivery_date: editValues.eta || undefined,
+            fuel_type: editValues.fuel1 || undefined,
+            quantity: editValues.qty1 ? parseFloat(editValues.qty1) : undefined,
+            fuel_type2: editValues.fuel2 || undefined,
+            quantity2: editValues.qty2 ? parseFloat(editValues.qty2) : undefined,
+          });
+        }
+        setIsEditing(false);
+      } else {
+        console.error('Failed to update session fields');
+      }
+    } catch (error) {
+      console.error('Failed to update session:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // 필드별 질문 메시지 생성 (Buyer 측 - 인쿼리 단계)
-  // TODO: session에서 customer language 정보를 가져와서 언어 결정 (현재는 한국어 기본)
   const getFieldQuestion = (fieldKey: string, lang: 'ko' | 'en' = 'ko'): string => {
     const questions: Record<string, Record<string, string>> = {
       vessel: { ko: '배 이름이 어떻게 되나요?', en: 'What is the vessel name?' },
@@ -386,7 +451,6 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
       fuel1: { ko: '유종이 어떻게 되나요?', en: 'What is the fuel type?' }
     };
 
-    // fuel2 질문은 유종명을 동적으로 포함
     if (fieldKey === 'fuel2') {
       if (lang === 'en') {
         return session?.fuel_type2
@@ -398,7 +462,6 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
         : '유종이 어떻게 되나요?';
     }
 
-    // 수량 질문은 해당 유종명을 포함
     if (fieldKey === 'qty1') {
       if (lang === 'en') {
         return session?.fuel_type
@@ -425,7 +488,7 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
 
   // 빈 필드 클릭 시 질문 전송
   const handleMissingFieldClick = async (fieldKey: string) => {
-    if (!session) return;
+    if (!session || isEditing) return;
 
     const question = getFieldQuestion(fieldKey);
     if (!question) return;
@@ -439,7 +502,6 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
     };
     const internalPlatform = platformToInternal[platform] || 'kakao';
 
-    // 로컬 상태에 메시지 추가
     const message: ChatMessage = {
       message_id: Date.now(),
       room_name: session.customer_room_name,
@@ -452,7 +514,6 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
     };
     addBuyerMessage(message);
 
-    // 백엔드로 전송
     try {
       await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
@@ -468,8 +529,7 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
     }
   };
 
-  // 행 기반 레이아웃: [Vessel, IMO], [Port, ETA], [Fuel1, QTY1], [Fuel2, QTY2]
-  // IMO는 optional이므로 required: false로 설정
+  // 행 기반 레이아웃
   const rows = [
     [
       { key: 'vessel', label: 'Vessel', value: session?.vessel_name, filled: !!session?.vessel_name, required: true },
@@ -483,7 +543,7 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
       { key: 'fuel1', label: 'Fuel1', value: session?.fuel_type, filled: !!session?.fuel_type, required: true },
       { key: 'qty1', label: "QTY1", value: session?.quantity, filled: !!session?.quantity, required: true }
     ],
-    ...(session?.fuel_type2 ? [[
+    ...(session?.fuel_type2 || isEditing ? [[
       { key: 'fuel2', label: 'Fuel2', value: session?.fuel_type2, filled: !!session?.fuel_type2, required: true },
       { key: 'qty2', label: "QTY2", value: session?.quantity2, filled: !!session?.quantity2, required: true }
     ]] : [])
@@ -499,12 +559,41 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
     <div className="p-2 border-b bg-gradient-to-r from-purple-50 to-blue-50">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-purple-700">Required FullContext</span>
-        <span className={cn(
-          "text-[10px] px-2 py-0.5 rounded-full",
-          percentage === 100 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-        )}>
-          {filledCount}/{totalCount} ({percentage}%)
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            "text-[10px] px-2 py-0.5 rounded-full",
+            percentage === 100 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+          )}>
+            {filledCount}/{totalCount} ({percentage}%)
+          </span>
+          {isEditing ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="p-1 rounded hover:bg-green-100 text-green-600 disabled:opacity-50"
+                title="Save"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="p-1 rounded hover:bg-red-100 text-red-600"
+                title="Cancel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={startEditing}
+              className="p-1 rounded hover:bg-purple-100 text-purple-600"
+              title="Edit fields"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="space-y-1">
         {rows.map((row, rowIdx) => (
@@ -512,24 +601,38 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
             {row.map((field) => (
               <div
                 key={field.key}
-                onClick={() => !field.filled && handleMissingFieldClick(field.key)}
-                title={!field.filled ? `Click to ask: "${getFieldQuestion(field.key)}"` : ''}
+                onClick={() => !isEditing && !field.filled && handleMissingFieldClick(field.key)}
+                title={!isEditing && !field.filled ? `Click to ask: "${getFieldQuestion(field.key)}"` : ''}
                 className={cn(
                   "flex items-center gap-1 px-2 py-1 rounded text-[10px]",
-                  field.filled
-                    ? "bg-green-100/50 border border-green-200"
-                    : "bg-white border border-dashed border-gray-300 cursor-pointer hover:bg-red-50 hover:border-red-300"
+                  isEditing
+                    ? "bg-white border border-purple-200"
+                    : field.filled
+                      ? "bg-green-100/50 border border-green-200"
+                      : "bg-white border border-dashed border-gray-300 cursor-pointer hover:bg-red-50 hover:border-red-300"
                 )}
               >
-                {field.filled ? (
-                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
-                ) : (
-                  <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                {!isEditing && (
+                  field.filled ? (
+                    <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <Circle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                  )
                 )}
-                <span className="font-medium text-gray-600">{field.label}:</span>
-                <span className={cn("truncate", field.filled ? "text-green-700 font-medium" : "text-gray-400 italic")}>
-                  {field.value || "—"}
-                </span>
+                <span className="font-medium text-gray-600 flex-shrink-0">{field.label}:</span>
+                {isEditing ? (
+                  <input
+                    type={field.key.includes('qty') ? 'number' : 'text'}
+                    value={editValues[field.key] || ''}
+                    onChange={(e) => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                    className="flex-1 min-w-0 bg-transparent border-none outline-none text-[10px] text-purple-700 font-medium"
+                    placeholder={field.label}
+                  />
+                ) : (
+                  <span className={cn("truncate", field.filled ? "text-green-700 font-medium" : "text-gray-400 italic")}>
+                    {field.value || "—"}
+                  </span>
+                )}
               </div>
             ))}
           </div>
