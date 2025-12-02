@@ -69,16 +69,11 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
 function DealDetailModalContent({ onClose }: { onClose: () => void }) {
   const {
     session,
-    columns,
-    resizeColumn,
-    isResizing,
-    setIsResizing,
     showAIPanel,
     setShowAIPanel,
     setRoomPlatforms
   } = useDealModal();
 
-  const [resizingColumn, setResizingColumn] = useState<'buyer' | 'ai' | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Load room platforms from /chats/rooms API
@@ -102,33 +97,6 @@ function DealDetailModalContent({ onClose }: { onClose: () => void }) {
     fetchRoomPlatforms();
   }, [setRoomPlatforms]);
 
-  // Handle column resize
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!resizingColumn || !containerRef.current) return;
-
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - containerRect.left;
-    const percentage = (mouseX / containerRect.width) * 100;
-
-    resizeColumn(resizingColumn, percentage);
-  }, [resizingColumn, resizeColumn]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsResizing(false);
-    setResizingColumn(null);
-  }, [setIsResizing]);
-
-  useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isResizing, handleMouseMove, handleMouseUp]);
-
   if (!session) return null;
 
   return (
@@ -140,53 +108,22 @@ function DealDetailModalContent({ onClose }: { onClose: () => void }) {
         onToggleAI={() => setShowAIPanel(true)}
       />
 
-      {/* 3-Column Layout */}
+      {/* 3-Column Layout - 고정 비율 22:45:33 */}
       <div ref={containerRef} className="flex flex-1 relative overflow-hidden">
-        {/* Buyer Chat Column */}
-        <div
-          className="flex-shrink-0 border-r h-full"
-          style={{ width: `${columns.buyer.width}%` }}
-        >
+        {/* Buyer Chat Column - 22% */}
+        <div className="border-r h-full" style={{ width: '22%' }}>
           <BuyerChatColumn />
         </div>
 
-        {/* Resize Handle 1 */}
-        <ResizeHandle
-          onMouseDown={() => {
-            setResizingColumn('buyer');
-            setIsResizing(true);
-          }}
-        />
-
-        {/* AI Assistant Column */}
+        {/* AI Assistant Column - 45% */}
         {showAIPanel && (
-          <>
-            <div
-              className="flex-shrink-0 border-r bg-gray-50 h-full"
-              style={{ width: `${columns.ai.width}%` }}
-            >
-              <AIAssistantColumn />
-            </div>
-
-            {/* Resize Handle 2 */}
-            <ResizeHandle
-              onMouseDown={() => {
-                setResizingColumn('ai');
-                setIsResizing(true);
-              }}
-            />
-          </>
+          <div className="border-r bg-gray-50 h-full" style={{ width: '45%' }}>
+            <AIAssistantColumn />
+          </div>
         )}
 
-        {/* Seller Chats Column */}
-        <div
-          className="flex-grow h-full"
-          style={{
-            width: showAIPanel
-              ? `${columns.seller.width}%`
-              : `${columns.seller.width + columns.ai.width}%`
-          }}
-        >
+        {/* Seller Chats Column - 33% (or 78% when AI hidden) */}
+        <div className="h-full" style={{ width: showAIPanel ? '33%' : '78%' }}>
           <SellerChatsColumn />
         </div>
       </div>
@@ -2240,13 +2177,3 @@ const SellerChatRoom = memo(({
   );
 });
 SellerChatRoom.displayName = 'SellerChatRoom';
-
-const ResizeHandle = memo(({ onMouseDown }: { onMouseDown: () => void }) => {
-  return (
-    <div
-      className="w-1 hover:w-2 bg-gray-200 hover:bg-gray-300 cursor-col-resize transition-all"
-      onMouseDown={onMouseDown}
-    />
-  );
-});
-ResizeHandle.displayName = 'ResizeHandle';
