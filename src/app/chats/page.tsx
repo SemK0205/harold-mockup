@@ -500,6 +500,13 @@ export default function ChatsPage() {
                             })}
                           </span>
                         </div>
+                        {/* 답장 원본 메시지 표시 */}
+                        {msg.reply_to_message && (
+                          <div className="mb-2 pl-2 border-l-2 border-gray-300 text-xs text-gray-500">
+                            <span className="font-medium">{msg.reply_to_author || "알 수 없음"}</span>
+                            <p className="whitespace-pre-wrap break-words">{msg.reply_to_message}</p>
+                          </div>
+                        )}
                         <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                       </div>
                     </div>

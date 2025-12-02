@@ -23,6 +23,7 @@ export interface SellerContext {
   quote: SellerQuoteData | null;
   earliest?: string | null;
   requested_at?: string;
+  contacted_at?: string;  // 인쿼리 전송 시점
   received_at?: string;
   no_offer_reason?: string;
   // 수집 필요 필드 (단계에 따라 동적으로 결정)
@@ -154,6 +155,8 @@ export interface ChatMessage {
   direction: "incoming" | "outgoing";
   timestamp: string; // ISO timestamp
   created_at: string; // ISO timestamp
+  reply_to_message?: string; // WhatsApp/WeChat 답장 원본 메시지
+  reply_to_author?: string; // WhatsApp/WeChat 답장 원본 작성자
 }
 
 // ============================================

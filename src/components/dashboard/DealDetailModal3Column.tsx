@@ -31,8 +31,11 @@ import {
   Sparkles,
   Plus,
   Pencil,
-  Check
+  Check,
+  TrendingUp,
+  Bell
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import type { TradingSession, ChatMessage, AISuggestion, SellerStatus, SellerContext, DealStage } from "@/types";
@@ -235,7 +238,9 @@ const BuyerChatColumn = memo(() => {
             timestamp: msg.created_at,
             package_name: msg.platform || 'com.kakao.talk',
             direction: msg.direction || (ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' : 'incoming'),
-            created_at: msg.created_at
+            created_at: msg.created_at,
+            reply_to_message: msg.reply_to_message,
+            reply_to_author: msg.reply_to_author
           })));
 
           // Mark messages as read (구매측)
@@ -1066,6 +1071,26 @@ const AIAssistantColumn = memo(() => {
     addBuyerMessage
   } = useDealModal();
 
+  // seller_contexts 접근을 위한 store 연결
+  const sessionId = session?.session_id || '';
+  const sellerContextsMap = useDealStore((state) => state.sellerContextsBySession);
+  const storeSellerContexts = sessionId ? sellerContextsMap.get(sessionId) : undefined;
+
+  // 특정 트레이더의 seller_context 가져오기
+  const getSellerContext = (traderRoomName: string) => {
+    return storeSellerContexts?.[traderRoomName] || session?.seller_contexts?.[traderRoomName];
+  };
+
+  // 경과 시간 계산 헬퍼
+  const getElapsedTime = (isoTimestamp: string | undefined): string | null => {
+    if (!isoTimestamp) return null;
+    try {
+      return formatDistanceToNow(new Date(isoTimestamp), { addSuffix: true });
+    } catch {
+      return null;
+    }
+  };
+
   const [showFullContext, setShowFullContext] = useState(false); // 임시로 숨김 - Seller Quote Matrix로 대체됨
   const [inquirySenderExpanded, setInquirySenderExpanded] = useState(true); // Inquiry Sender 접기/펼치기
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
@@ -1078,6 +1103,15 @@ const AIAssistantColumn = memo(() => {
   const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
   // 커스텀 트레이더 (추가된 트레이더)
   const [customTraders, setCustomTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
+
+  // Price Trends 관련 상태
+  const [priceTrendsExpanded, setPriceTrendsExpanded] = useState(false);
+  const [priceTrendPeriod, setPriceTrendPeriod] = useState<"3m" | "6m" | "1y">("3m");
+  const [priceTrendData, setPriceTrendData] = useState<Array<{date: string; avg_price: number | null; min_price: number | null; max_price: number | null; count: number}>>([]);
+  const [priceTrendLoading, setPriceTrendLoading] = useState(false);
+
+  // 수동 리마인더 발송 상태 (트레이더별 로딩 상태)
+  const [reminderSending, setReminderSending] = useState<Set<string>>(new Set());
 
   // 선택된 타겟 키 생성 헬퍼
   const getTargetKey = (suggestionId: number, optionIndex: number) => `${suggestionId}-${optionIndex}`;
@@ -1097,6 +1131,75 @@ const AIAssistantColumn = memo(() => {
     };
     fetchAllTraders();
   }, []);
+
+  // Price Trends 데이터 가져오기
+  const fetchPriceTrends = async (period: "3m" | "6m" | "1y") => {
+    if (!session?.port || !session?.fuel_type) return;
+
+    setPriceTrendLoading(true);
+    try {
+      const response = await fetch(
+        `${getApiUrl()}/api/price-trends?port=${encodeURIComponent(session.port)}&fuel_type=${encodeURIComponent(session.fuel_type)}&period=${period}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setPriceTrendData(data.trends || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch price trends:', error);
+      setPriceTrendData([]);
+    } finally {
+      setPriceTrendLoading(false);
+    }
+  };
+
+  // Price Trends 섹션이 펼쳐지면 데이터 로드
+  useEffect(() => {
+    if (priceTrendsExpanded && session?.port && session?.fuel_type) {
+      fetchPriceTrends(priceTrendPeriod);
+    }
+  }, [priceTrendsExpanded, priceTrendPeriod, session?.port, session?.fuel_type]);
+
+  // 수동 리마인더 발송
+  const sendReminder = async (traderRoomName: string, language: string = "ko") => {
+    if (!session?.session_id) return;
+
+    // 이미 발송 중이면 무시
+    if (reminderSending.has(traderRoomName)) return;
+
+    setReminderSending(prev => new Set(prev).add(traderRoomName));
+    try {
+      const response = await fetch(`${getApiUrl()}/api/reminder/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: session.session_id,
+          trader_room_name: traderRoomName,
+          language: language
+        })
+      });
+      if (response.ok) {
+        // 성공 시 세션 새로고침 (last_reminder_at 업데이트 반영)
+        if (onSessionUpdate) {
+          onSessionUpdate();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send reminder:', error);
+    } finally {
+      setReminderSending(prev => {
+        const next = new Set(prev);
+        next.delete(traderRoomName);
+        return next;
+      });
+    }
+  };
+
+  // 트레이더 언어 조회 헬퍼
+  const getTraderLanguage = (roomName: string): string => {
+    const trader = allTraders.find(t => t.room_name === roomName);
+    return trader?.language || "ko";
+  };
 
   // 타겟 선택 초기화 (AI 추천 트레이더만 선택)
   const initializeTargets = (suggestionId: number, optionIndex: number, targets: any[]) => {
@@ -1532,12 +1635,21 @@ const AIAssistantColumn = memo(() => {
                                 suggestion.suggestions[selectedOptionIndex]?.targets || [],
                                 trader.room_name
                               );
+                              // seller_contexts에서 해당 트레이더 정보 조회
+                              const sellerContext = getSellerContext(trader.room_name);
+                              const isSent = !!sellerContext?.contacted_at;
+                              const elapsedTime = getElapsedTime(sellerContext?.contacted_at);
+
                               return (
                                 <div
                                   key={trader.id}
                                   className={cn(
                                     "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
-                                    isSelected ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-transparent hover:bg-gray-100"
+                                    isSent
+                                      ? "bg-gray-100 border border-gray-200"
+                                      : isSelected
+                                        ? "bg-blue-50 border border-blue-200"
+                                        : "bg-gray-50 border border-transparent hover:bg-gray-100"
                                   )}
                                   onClick={() => toggleTraderRoom(suggestion.id, selectedOptionIndex, trader.room_name)}
                                 >
@@ -1549,11 +1661,27 @@ const AIAssistantColumn = memo(() => {
                                   </div>
                                   <span className={cn(
                                     "truncate flex-1",
-                                    isSelected ? "text-blue-900 font-medium" : "text-gray-700"
+                                    isSent
+                                      ? "text-gray-500"
+                                      : isSelected
+                                        ? "text-blue-900 font-medium"
+                                        : "text-gray-700"
                                   )}>
                                     {trader.room_name}
                                   </span>
-                                  {isRecommended && (
+                                  {/* Sent 뱃지 + 경과 시간 */}
+                                  {isSent && (
+                                    <div className="flex items-center gap-1">
+                                      <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-100 text-blue-700 border-blue-200">
+                                        Sent
+                                      </Badge>
+                                      {elapsedTime && (
+                                        <span className="text-[9px] text-gray-400">{elapsedTime}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* 추천 뱃지 (Sent와 별개로 표시) */}
+                                  {isRecommended && !isSent && (
                                     <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-700 border-green-200">
                                       추천
                                     </Badge>
@@ -1691,6 +1819,164 @@ const AIAssistantColumn = memo(() => {
                 No inquiry session available
               </div>
             ) : null}
+          </div>
+
+          {/* Price Trends Section */}
+          {session?.port && session?.fuel_type && (
+          <div className="space-y-3">
+            {/* Price Trends Header */}
+            <div
+              className={cn(
+                "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors border",
+                priceTrendsExpanded
+                  ? "bg-gray-100 hover:bg-gray-200 border-gray-200"
+                  : "bg-green-50 hover:bg-green-100 border-green-200"
+              )}
+              onClick={() => setPriceTrendsExpanded(!priceTrendsExpanded)}
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+                <h4 className="text-sm font-medium">Price Trends</h4>
+                {!priceTrendsExpanded && (
+                  <span className="text-xs text-green-600 ml-2">Click to expand</span>
+                )}
+              </div>
+              <div className={cn(
+                "p-1 rounded",
+                priceTrendsExpanded ? "hover:bg-gray-300" : "bg-green-100"
+              )}>
+                {priceTrendsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 text-green-600" />}
+              </div>
+            </div>
+
+            {/* Price Trends Content */}
+            {priceTrendsExpanded && (
+              <div className="mt-3 space-y-3">
+                {/* Period Selection */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600">Period:</span>
+                  <div className="flex gap-1">
+                    {(["3m", "6m", "1y"] as const).map((period) => (
+                      <button
+                        key={period}
+                        onClick={() => setPriceTrendPeriod(period)}
+                        className={cn(
+                          "px-2 py-1 text-xs rounded transition-colors",
+                          priceTrendPeriod === period
+                            ? "bg-green-500 text-white"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        )}
+                      >
+                        {period.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-500 ml-2">
+                    {session.port} / {session.fuel_type}
+                  </span>
+                </div>
+
+                {/* Chart */}
+                <div className="border rounded-lg p-3 bg-white">
+                  {priceTrendLoading ? (
+                    <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
+                      Loading...
+                    </div>
+                  ) : priceTrendData.length > 0 ? (
+                    <div className="h-48">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={priceTrendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(value) => value.substring(5)} // "2025-01" → "01"
+                          />
+                          <YAxis
+                            tick={{ fontSize: 10 }}
+                            domain={['auto', 'auto']}
+                            tickFormatter={(value) => `$${value}`}
+                          />
+                          <Tooltip
+                            formatter={(value: number) => [`$${value?.toFixed(2)}`, 'Avg Price']}
+                            labelFormatter={(label) => `Month: ${label}`}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="avg_price"
+                            stroke="#22c55e"
+                            strokeWidth={2}
+                            dot={{ fill: '#22c55e', r: 3 }}
+                            activeDot={{ r: 5 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
+                      No price data available for this port/fuel combination
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary Stats */}
+                {priceTrendData.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="bg-gray-50 rounded p-2 text-center">
+                      <div className="text-gray-500">Latest</div>
+                      <div className="font-medium">
+                        ${priceTrendData[priceTrendData.length - 1]?.avg_price?.toFixed(2) || '-'}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-2 text-center">
+                      <div className="text-gray-500">Min</div>
+                      <div className="font-medium">
+                        ${Math.min(...priceTrendData.filter(d => d.avg_price).map(d => d.avg_price!)).toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded p-2 text-center">
+                      <div className="text-gray-500">Max</div>
+                      <div className="font-medium">
+                        ${Math.max(...priceTrendData.filter(d => d.avg_price).map(d => d.avg_price!)).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Auto Reminder Toggle */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <Bell className={cn("w-4 h-4", reminderEnabled ? "text-orange-500" : "text-gray-400")} />
+                <div>
+                  <h4 className="text-sm font-medium">Auto Reminder</h4>
+                  <p className="text-xs text-gray-500">
+                    {reminderEnabled ? "3시간 후 자동 리마인더 발송" : "자동 리마인더 비활성화"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={toggleReminder}
+                disabled={reminderLoading}
+                className={cn(
+                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                  reminderEnabled ? "bg-orange-500" : "bg-gray-300",
+                  reminderLoading && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                    reminderEnabled ? "translate-x-6" : "translate-x-1"
+                  )}
+                />
+              </button>
+            </div>
           </div>
         </div>
       </ScrollArea>
@@ -1893,7 +2179,9 @@ const SellerChatsColumn = memo(() => {
               timestamp: msg.created_at,
               package_name: msg.platform || platform,
               direction: (msg.direction || (ourSenders.some(s => msg.sender?.includes(s)) ? 'outgoing' : 'incoming')) as 'incoming' | 'outgoing',
-              created_at: msg.created_at
+              created_at: msg.created_at,
+              reply_to_message: msg.reply_to_message,
+              reply_to_author: msg.reply_to_author
             }));
             setSellerMessagesForTrader(trader, formattedMessages);
 
@@ -2178,6 +2466,16 @@ const MessageBubble = memo(({ message }: { message: ChatMessage }) => {
             : "bg-gray-100 text-gray-900"
         )}
       >
+        {/* 답장 원본 메시지 표시 */}
+        {message.reply_to_message && (
+          <div className={cn(
+            "mb-2 pl-2 border-l-2 text-xs",
+            isOutgoing ? "border-blue-300 text-blue-100" : "border-gray-300 text-gray-500"
+          )}>
+            <span className="font-medium">{message.reply_to_author || "알 수 없음"}</span>
+            <p className="whitespace-pre-wrap break-words">{message.reply_to_message}</p>
+          </div>
+        )}
         <div className="text-sm">{message.message}</div>
         <div className={cn(
           "text-xs mt-1",
