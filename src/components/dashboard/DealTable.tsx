@@ -7,7 +7,7 @@
 
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Trash2 } from "lucide-react";
+import { Trash2, Ship, Fuel } from "lucide-react";
 import { DealScoreboard } from "@/types";
 import { useNotificationStore } from "@/stores";
 import { useShallow } from "zustand/react/shallow";
@@ -214,14 +214,14 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
                     {/* 선주측(구매측) 읽지 않은 메시지 - 배 아이콘 */}
                     {(deal.buyer_unread_count ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-green-600" title="선주측 읽지 않은 메시지">
-                        <span className="text-sm">🚢</span>
+                        <Ship className="w-4 h-4" />
                         <span className="text-xs font-medium">{deal.buyer_unread_count}</span>
                       </span>
                     )}
-                    {/* 판매측 읽지 않은 메시지 - 닻 아이콘 */}
+                    {/* 판매측 읽지 않은 메시지 - 연료 아이콘 */}
                     {(deal.seller_unread_count ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-blue-600" title="판매측 읽지 않은 메시지">
-                        <span className="text-sm">⚓</span>
+                        <Fuel className="w-4 h-4" />
                         <span className="text-xs font-medium">{deal.seller_unread_count}</span>
                       </span>
                     )}
