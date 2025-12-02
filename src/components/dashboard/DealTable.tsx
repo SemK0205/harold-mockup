@@ -214,7 +214,7 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
                     {/* 선주측(구매측) 읽지 않은 메시지 - 배 아이콘 */}
                     {(deal.buyer_unread_count ?? 0) > 0 && (
                       <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-green-500 text-white"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500 text-white"
                         title="선주측 읽지 않은 메시지"
                         style={{ animation: 'scale-ping 1.5s ease-in-out infinite' }}
                       >
@@ -225,7 +225,7 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
                     {/* 판매측 읽지 않은 메시지 - 연료 아이콘 */}
                     {(deal.seller_unread_count ?? 0) > 0 && (
                       <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500 text-white"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white"
                         title="판매측 읽지 않은 메시지"
                         style={{ animation: 'scale-ping 1.5s ease-in-out infinite' }}
                       >
