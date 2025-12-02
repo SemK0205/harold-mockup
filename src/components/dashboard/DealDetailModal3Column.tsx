@@ -116,10 +116,10 @@ function DealDetailModalContent({ onClose: _onClose }: { onClose: () => void }) 
         onToggleAI={() => setShowAIPanel(true)}
       />
 
-      {/* 3-Column Layout - 고정 비율 22:45:33 */}
+      {/* 3-Column Layout - 고정 비율 28:45:27 */}
       <div ref={containerRef} className="flex flex-1 relative overflow-hidden">
-        {/* Buyer Chat Column - 22% */}
-        <div className="border-r h-full" style={{ width: '22%' }}>
+        {/* Buyer Chat Column - 28% */}
+        <div className="border-r h-full" style={{ width: '28%' }}>
           <BuyerChatColumn />
         </div>
 
@@ -130,8 +130,8 @@ function DealDetailModalContent({ onClose: _onClose }: { onClose: () => void }) 
           </div>
         )}
 
-        {/* Seller Chats Column - 33% (or 78% when AI hidden) */}
-        <div className="h-full" style={{ width: showAIPanel ? '33%' : '78%' }}>
+        {/* Seller Chats Column - 27% (or 72% when AI hidden) */}
+        <div className="h-full" style={{ width: showAIPanel ? '27%' : '72%' }}>
           <SellerChatsColumn />
         </div>
       </div>
@@ -1669,7 +1669,7 @@ const AIAssistantColumn = memo(() => {
                                   )}>
                                     {trader.room_name}
                                   </span>
-                                  {/* Sent 뱃지 + 경과 시간 */}
+                                  {/* Sent 뱃지 + 경과 시간 + 리마인더 버튼 */}
                                   {isSent && (
                                     <div className="flex items-center gap-1">
                                       <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-100 text-blue-700 border-blue-200">
@@ -1678,6 +1678,24 @@ const AIAssistantColumn = memo(() => {
                                       {elapsedTime && (
                                         <span className="text-[9px] text-gray-400">{elapsedTime}</span>
                                       )}
+                                      {/* 리마인더 버튼 */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          sendReminder(trader.room_name, getTraderLanguage(trader.room_name));
+                                        }}
+                                        disabled={reminderSending.has(trader.room_name)}
+                                        className={cn(
+                                          "p-0.5 rounded hover:bg-orange-100 transition-colors",
+                                          reminderSending.has(trader.room_name) && "opacity-50 cursor-not-allowed"
+                                        )}
+                                        title="리마인더 발송"
+                                      >
+                                        <Bell className={cn(
+                                          "w-3 h-3",
+                                          reminderSending.has(trader.room_name) ? "text-gray-400 animate-pulse" : "text-orange-500"
+                                        )} />
+                                      </button>
                                     </div>
                                   )}
                                   {/* 추천 뱃지 (Sent와 별개로 표시) */}
@@ -1948,36 +1966,6 @@ const AIAssistantColumn = memo(() => {
           </div>
           )}
 
-          {/* Auto Reminder Toggle */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-200">
-              <div className="flex items-center gap-2">
-                <Bell className={cn("w-4 h-4", reminderEnabled ? "text-orange-500" : "text-gray-400")} />
-                <div>
-                  <h4 className="text-sm font-medium">Auto Reminder</h4>
-                  <p className="text-xs text-gray-500">
-                    {reminderEnabled ? "3시간 후 자동 리마인더 발송" : "자동 리마인더 비활성화"}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={toggleReminder}
-                disabled={reminderLoading}
-                className={cn(
-                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                  reminderEnabled ? "bg-orange-500" : "bg-gray-300",
-                  reminderLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <span
-                  className={cn(
-                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                    reminderEnabled ? "translate-x-6" : "translate-x-1"
-                  )}
-                />
-              </button>
-            </div>
-          </div>
         </div>
       </ScrollArea>
 
