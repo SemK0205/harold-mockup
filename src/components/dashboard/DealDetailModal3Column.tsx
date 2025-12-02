@@ -1591,15 +1591,9 @@ const AIAssistantColumn = memo(() => {
                 {inquirySenderExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 text-blue-600" />}
               </div>
             </div>
-            {inquirySenderExpanded && aiSuggestions.length > 0 ? (
-              (() => {
-                // 최신 suggestion 1개만 사용 (여러 개가 쌓여도 마지막 것만 표시)
-                const suggestion = aiSuggestions[aiSuggestions.length - 1];
-                const recommendedTargets = suggestion.suggestions[selectedOptionIndex]?.targets || [];
-
-                return (
-                <div key={suggestion.id} className="border rounded-lg overflow-hidden">
-                  {/* Inquiry Sender 내용 - 바로 표시 */}
+            {inquirySenderExpanded && (
+                <div className="border rounded-lg overflow-hidden">
+                  {/* Inquiry Sender 내용 */}
                   <div className="p-3 bg-gray-50 space-y-3">
                       {/* 트레이더 선택 UI - 전체 트레이더 목록 */}
                       {allTraders.length > 0 && (
@@ -1609,13 +1603,18 @@ const AIAssistantColumn = memo(() => {
                             <span className="text-xs font-medium text-gray-700">Select Recipients</span>
                             <div className="flex gap-1">
                               <button
-                                onClick={() => selectAllTraders(suggestion.id, selectedOptionIndex)}
+                                onClick={() => {
+                                  const allRooms = new Set(allTraders.map(t => t.room_name));
+                                  setSelectedTraderRooms(new Map([['inquiry', allRooms]]));
+                                }}
                                 className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                               >
                                 All
                               </button>
                               <button
-                                onClick={() => deselectAllTraders(suggestion.id, selectedOptionIndex)}
+                                onClick={() => {
+                                  setSelectedTraderRooms(new Map([['inquiry', new Set()]]));
+                                }}
                                 className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                               >
                                 None
@@ -1623,180 +1622,113 @@ const AIAssistantColumn = memo(() => {
                             </div>
                           </div>
 
-                          {/* 전체 트레이더 목록 - 추천 트레이더가 상단에 오도록 정렬 */}
+                          {/* 전체 트레이더 목록 - AI 추천 트레이더가 상단에 오도록 정렬 */}
                           <div className="p-2 space-y-1">
-                            {[...allTraders].sort((a, b) => {
-                              const aRecommended = isRecommendedTrader(recommendedTargets, a.room_name);
-                              const bRecommended = isRecommendedTrader(recommendedTargets, b.room_name);
-                              if (aRecommended && !bRecommended) return -1;
-                              if (!aRecommended && bRecommended) return 1;
-                              return 0;
-                            }).map((trader) => {
-                              const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
-                              const isRecommended = isRecommendedTrader(recommendedTargets, trader.room_name);
-                              // seller_contexts에서 해당 트레이더 정보 조회
-                              const sellerContext = getSellerContext(trader.room_name);
-                              const isSent = !!sellerContext?.contacted_at;
-                              const elapsedTime = getElapsedTime(sellerContext?.contacted_at);
+                            {(() => {
+                              // AI 추천 트레이더 목록 (최신 suggestion에서)
+                              const latestSuggestion = aiSuggestions[aiSuggestions.length - 1];
+                              const recommendedTargets = latestSuggestion?.suggestions?.[0]?.targets || [];
 
-                              return (
-                                <div
-                                  key={trader.id}
-                                  className={cn(
-                                    "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
-                                    isSent
-                                      ? "bg-gray-100 border border-gray-200"
-                                      : isSelected
-                                        ? "bg-blue-50 border border-blue-200"
-                                        : "bg-gray-50 border border-transparent hover:bg-gray-100"
-                                  )}
-                                  onClick={() => toggleTraderRoom(suggestion.id, selectedOptionIndex, trader.room_name)}
-                                >
-                                  <div className={cn(
-                                    "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
-                                    isSelected ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
-                                  )}>
-                                    {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
-                                  </div>
-                                  <span className={cn(
-                                    "truncate flex-1",
-                                    isSent
-                                      ? "text-gray-500"
-                                      : isSelected
-                                        ? "text-blue-900 font-medium"
-                                        : "text-gray-700"
-                                  )}>
-                                    {trader.room_name}
-                                  </span>
-                                  {/* Sent 뱃지 + 경과 시간 + 리마인더 버튼 */}
-                                  {isSent && (
-                                    <div className="flex items-center gap-1">
-                                      <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-100 text-blue-700 border-blue-200">
-                                        Sent
-                                      </Badge>
-                                      {elapsedTime && (
-                                        <span className="text-[9px] text-gray-400">{elapsedTime}</span>
-                                      )}
-                                      {/* 리마인더 버튼 */}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          sendReminder(trader.room_name, getTraderLanguage(trader.room_name));
-                                        }}
-                                        disabled={reminderSending.has(trader.room_name)}
-                                        className={cn(
-                                          "p-0.5 rounded hover:bg-orange-100 transition-colors",
-                                          reminderSending.has(trader.room_name) && "opacity-50 cursor-not-allowed"
-                                        )}
-                                        title="리마인더 발송"
-                                      >
-                                        <Bell className={cn(
-                                          "w-3 h-3",
-                                          reminderSending.has(trader.room_name) ? "text-gray-400 animate-pulse" : "text-orange-500"
-                                        )} />
-                                      </button>
-                                    </div>
-                                  )}
-                                  {/* 추천 뱃지 (Sent와 별개로 표시) */}
-                                  {isRecommended && !isSent && (
-                                    <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-700 border-green-200">
-                                      추천
-                                    </Badge>
-                                  )}
-                                </div>
-                              );
-                            })}
+                              // 추천 트레이더가 상단에 오도록 정렬
+                              const sortedTraders = [...allTraders].sort((a, b) => {
+                                const aRecommended = isRecommendedTrader(recommendedTargets, a.room_name);
+                                const bRecommended = isRecommendedTrader(recommendedTargets, b.room_name);
+                                if (aRecommended && !bRecommended) return -1;
+                                if (!aRecommended && bRecommended) return 1;
+                                return 0;
+                              });
 
-                            {/* 커스텀 트레이더 목록 */}
-                            {customTraders.map((trader) => {
-                              const isSelected = isTraderSelected(suggestion.id, selectedOptionIndex, trader.room_name);
-                              return (
-                                <div
-                                  key={trader.id}
-                                  className={cn(
-                                    "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
-                                    isSelected ? "bg-purple-50 border border-purple-200" : "bg-gray-50 border border-transparent hover:bg-gray-100"
-                                  )}
-                                  onClick={() => toggleTraderRoom(suggestion.id, selectedOptionIndex, trader.room_name)}
-                                >
-                                  <div className={cn(
-                                    "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
-                                    isSelected ? "bg-purple-500 border-purple-500" : "bg-white border-gray-300"
-                                  )}>
-                                    {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
-                                  </div>
-                                  <span className={cn(
-                                    "truncate flex-1",
-                                    isSelected ? "text-purple-900 font-medium" : "text-gray-700"
-                                  )}>
-                                    {trader.room_name}
-                                  </span>
-                                  <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-purple-100 text-purple-700 border-purple-200">
-                                    직접추가
-                                  </Badge>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeCustomTrader(trader.room_name);
+                              return sortedTraders.map((trader) => {
+                                const selectedSet = selectedTraderRooms.get('inquiry') || new Set();
+                                const isSelected = selectedSet.has(trader.room_name);
+                                const isRecommended = isRecommendedTrader(recommendedTargets, trader.room_name);
+                                // seller_contexts에서 해당 트레이더 정보 조회
+                                const sellerContext = getSellerContext(trader.room_name);
+                                const isSent = !!sellerContext?.contacted_at;
+                                const elapsedTime = getElapsedTime(sellerContext?.contacted_at);
+
+                                return (
+                                  <div
+                                    key={trader.id}
+                                    className={cn(
+                                      "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors",
+                                      isSent
+                                        ? "bg-gray-100 border border-gray-200"
+                                        : isSelected
+                                          ? "bg-blue-50 border border-blue-200"
+                                          : "bg-gray-50 border border-transparent hover:bg-gray-100"
+                                    )}
+                                    onClick={() => {
+                                      const currentSet = selectedTraderRooms.get('inquiry') || new Set();
+                                      const newSet = new Set(currentSet);
+                                      if (newSet.has(trader.room_name)) {
+                                        newSet.delete(trader.room_name);
+                                      } else {
+                                        newSet.add(trader.room_name);
+                                      }
+                                      setSelectedTraderRooms(new Map([['inquiry', newSet]]));
                                     }}
-                                    className="p-0.5 hover:bg-red-100 rounded"
                                   >
-                                    <X className="w-3 h-3 text-red-500" />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* 트레이더 추가 드롭다운 - 임시 비활성화 */}
-                          {false && (
-                          <div className="px-2 py-2 border-t border-b">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full h-7 text-xs justify-between"
-                                >
-                                  <span className="text-gray-500">트레이더 선택...</span>
-                                  <Plus className="w-3 h-3 ml-2" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="max-h-48 overflow-y-auto w-64">
-                                {(() => {
-                                  const selectedRooms = getSelectedRoomNames(suggestion.id, selectedOptionIndex);
-                                  const customRoomNames = customTraders.map(t => t.room_name);
-                                  const availableTraders = allTraders.filter(t =>
-                                    !selectedRooms.includes(t.room_name) &&
-                                    !customRoomNames.includes(t.room_name)
-                                  );
-
-                                  if (availableTraders.length === 0) {
-                                    return (
-                                      <div className="px-2 py-2 text-xs text-gray-500 text-center">
-                                        추가할 트레이더가 없습니다
-                                      </div>
-                                    );
-                                  }
-
-                                  return availableTraders.map((trader) => (
-                                    <DropdownMenuItem
-                                      key={trader.id}
-                                      onClick={() => addTraderFromDropdown(suggestion.id, selectedOptionIndex, trader)}
-                                      className="text-xs cursor-pointer"
-                                    >
+                                    <div className={cn(
+                                      "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0",
+                                      isSelected ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"
+                                    )}>
+                                      {isSelected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span className={cn(
+                                      "truncate flex-1",
+                                      isSent
+                                        ? "text-gray-500"
+                                        : isSelected
+                                          ? "text-blue-900 font-medium"
+                                          : "text-gray-700"
+                                    )}>
                                       {trader.room_name}
-                                    </DropdownMenuItem>
-                                  ));
-                                })()}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                    </span>
+                                    {/* Sent 뱃지 + 경과 시간 + 리마인더 버튼 */}
+                                    {isSent && (
+                                      <div className="flex items-center gap-1">
+                                        <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-blue-100 text-blue-700 border-blue-200">
+                                          Sent
+                                        </Badge>
+                                        {elapsedTime && (
+                                          <span className="text-[9px] text-gray-400">{elapsedTime}</span>
+                                        )}
+                                        {/* 리마인더 버튼 */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            sendReminder(trader.room_name, getTraderLanguage(trader.room_name));
+                                          }}
+                                          disabled={reminderSending.has(trader.room_name)}
+                                          className={cn(
+                                            "p-0.5 rounded hover:bg-orange-100 transition-colors",
+                                            reminderSending.has(trader.room_name) && "opacity-50 cursor-not-allowed"
+                                          )}
+                                          title="리마인더 발송"
+                                        >
+                                          <Bell className={cn(
+                                            "w-3 h-3",
+                                            reminderSending.has(trader.room_name) ? "text-gray-400 animate-pulse" : "text-orange-500"
+                                          )} />
+                                        </button>
+                                      </div>
+                                    )}
+                                    {/* AI 추천 뱃지 (Sent가 아닌 경우만) */}
+                                    {isRecommended && !isSent && (
+                                      <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-green-100 text-green-700 border-green-200">
+                                        추천
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })()}
                           </div>
-                          )}
 
                           {/* 선택 카운터 */}
                           <div className="px-3 py-2 bg-gray-50 text-xs text-gray-600">
-                            {getSelectedTraderCount(suggestion.id, selectedOptionIndex)} of {allTraders.length + customTraders.length} selected
+                            {selectedTraderRooms.get('inquiry')?.size || 0} of {allTraders.length} selected
                           </div>
                         </div>
                       )}
@@ -1813,30 +1745,50 @@ const AIAssistantColumn = memo(() => {
                         />
                       </div>
 
-                      {/* Action Buttons - Reject 버튼 제거 */}
+                      {/* Send Button */}
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           className="flex-1"
-                          onClick={() => handleApproveSuggestion(
-                            suggestion,
-                            selectedOptionIndex,
-                            editingMessage
-                          )}
-                          disabled={isProcessing || !editingMessage.trim()}
+                          onClick={async () => {
+                            const selectedRooms = selectedTraderRooms.get('inquiry') || new Set();
+                            if (selectedRooms.size === 0 || !editingMessage.trim()) return;
+
+                            setIsProcessing(true);
+                            try {
+                              // 선택된 트레이더들에게 메시지 전송
+                              for (const roomName of selectedRooms) {
+                                const trader = allTraders.find(t => t.room_name === roomName);
+                                if (trader) {
+                                  await fetch(`${getApiUrl()}/api/outgoing/send`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      room_name: roomName,
+                                      message: editingMessage,
+                                      package_name: trader.platform || 'com.kakao.talk',
+                                      session_id: session?.session_id
+                                    })
+                                  });
+                                }
+                              }
+                              // 전송 후 선택 초기화
+                              setSelectedTraderRooms(new Map([['inquiry', new Set()]]));
+                              setEditingMessage('');
+                            } catch (error) {
+                              console.error('Failed to send inquiry:', error);
+                            } finally {
+                              setIsProcessing(false);
+                            }
+                          }}
+                          disabled={isProcessing || !editingMessage.trim() || (selectedTraderRooms.get('inquiry')?.size || 0) === 0}
                         >
                           {isProcessing ? 'Sending...' : 'Send'}
                         </Button>
                       </div>
                     </div>
                 </div>
-                );
-              })()
-            ) : inquirySenderExpanded ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                No inquiry session available
-              </div>
-            ) : null}
+            )}
           </div>
 
           {/* Price Trends Section */}
