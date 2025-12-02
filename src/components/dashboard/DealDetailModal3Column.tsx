@@ -656,7 +656,24 @@ const SellerQuoteComparisonTable = memo(() => {
   const [isSaving, setIsSaving] = useState(false);
   const [showAddSeller, setShowAddSeller] = useState(false);
   const [newSellerName, setNewSellerName] = useState('');
+  const [allTraders, setAllTraders] = useState<Array<{id: string; name: string; room_name: string; platform: string}>>([]);
   const setSellerContexts = useDealStore((state) => state.setSellerContexts);
+
+  // 전체 트레이더 목록 로드
+  useEffect(() => {
+    const fetchAllTraders = async () => {
+      try {
+        const response = await fetch(`${getApiUrl()}/api/traders/all`);
+        if (response.ok) {
+          const data = await response.json();
+          setAllTraders(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch all traders:', error);
+      }
+    };
+    fetchAllTraders();
+  }, []);
 
   // 전역 store에서 seller_contexts 가져오기
   const sessionId = session?.session_id || '';
@@ -942,20 +959,27 @@ const SellerQuoteComparisonTable = memo(() => {
         </div>
       </div>
 
-      {/* 셀러 추가 입력창 */}
+      {/* 셀러 추가 드롭다운 */}
       {showAddSeller && (
         <div className="px-3 py-2 bg-indigo-50 border-b flex items-center gap-2">
-          <input
-            type="text"
+          <select
             value={newSellerName}
             onChange={(e) => setNewSellerName(e.target.value)}
-            placeholder="Enter seller name..."
-            className="flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            onKeyDown={(e) => e.key === 'Enter' && handleAddSeller()}
-          />
+            className="flex-1 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+          >
+            <option value="">Select seller...</option>
+            {allTraders
+              .filter(trader => !sellers.includes(trader.room_name))
+              .map(trader => (
+                <option key={trader.id} value={trader.room_name}>
+                  {trader.name} ({trader.room_name})
+                </option>
+              ))}
+          </select>
           <button
             onClick={handleAddSeller}
-            className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
+            disabled={!newSellerName}
+            className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Add
           </button>
