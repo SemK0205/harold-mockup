@@ -468,28 +468,31 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
     }
   };
 
-  // 행 기반 레이아웃: [Vessel], [Port, ETA], [Fuel1, QTY1], [Fuel2, QTY2]
+  // 행 기반 레이아웃: [Vessel, IMO], [Port, ETA], [Fuel1, QTY1], [Fuel2, QTY2]
+  // IMO는 optional이므로 required: false로 설정
   const rows = [
     [
-      { key: 'vessel', label: 'Vessel', value: session?.vessel_name, filled: !!session?.vessel_name, wide: true }
+      { key: 'vessel', label: 'Vessel', value: session?.vessel_name, filled: !!session?.vessel_name, required: true },
+      { key: 'imo', label: 'IMO', value: session?.imo, filled: !!session?.imo, required: false }
     ],
     [
-      { key: 'port', label: 'Port', value: session?.port, filled: !!session?.port },
-      { key: 'eta', label: 'ETA', value: session?.delivery_date, filled: !!session?.delivery_date }
+      { key: 'port', label: 'Port', value: session?.port, filled: !!session?.port, required: true },
+      { key: 'eta', label: 'ETA', value: session?.delivery_date, filled: !!session?.delivery_date, required: true }
     ],
     [
-      { key: 'fuel1', label: 'Fuel1', value: session?.fuel_type, filled: !!session?.fuel_type },
-      { key: 'qty1', label: "QTY1", value: session?.quantity, filled: !!session?.quantity }
+      { key: 'fuel1', label: 'Fuel1', value: session?.fuel_type, filled: !!session?.fuel_type, required: true },
+      { key: 'qty1', label: "QTY1", value: session?.quantity, filled: !!session?.quantity, required: true }
     ],
     ...(session?.fuel_type2 ? [[
-      { key: 'fuel2', label: 'Fuel2', value: session?.fuel_type2, filled: !!session?.fuel_type2 },
-      { key: 'qty2', label: "QTY2", value: session?.quantity2, filled: !!session?.quantity2 }
+      { key: 'fuel2', label: 'Fuel2', value: session?.fuel_type2, filled: !!session?.fuel_type2, required: true },
+      { key: 'qty2', label: "QTY2", value: session?.quantity2, filled: !!session?.quantity2, required: true }
     ]] : [])
   ];
 
   const allFields = rows.flat();
-  const filledCount = allFields.filter(f => f.filled).length;
-  const totalCount = allFields.length;
+  const requiredFields = allFields.filter(f => f.required);
+  const filledCount = requiredFields.filter(f => f.filled).length;
+  const totalCount = requiredFields.length;
   const percentage = Math.round((filledCount / totalCount) * 100);
 
   return (
@@ -559,7 +562,9 @@ const SellerQuoteComparisonTable = memo(() => {
     { key: 'fuel1_price', label: `${session?.fuel_type || 'Fuel1'} Price` },
     ...(fuelCount >= 2 ? [{ key: 'fuel2_price', label: `${session?.fuel_type2 || 'Fuel2'} Price` }] : []),
     { key: 'barge_fee', label: 'Barge Fee' },
-    { key: 'earliest', label: 'Earliest' }
+    { key: 'earliest', label: 'Earliest' },
+    { key: 'term', label: 'Term' },
+    { key: 'total', label: 'Total', isCalculated: true }
   ];
 
   // 판매자 컨텍스트 가져오기 (store 우선, 없으면 session)
@@ -574,6 +579,28 @@ const SellerQuoteComparisonTable = memo(() => {
 
     if (fieldKey === 'earliest') {
       return context.earliest || null;
+    }
+    if (fieldKey === 'term') {
+      return context.quote?.term || null;
+    }
+    if (fieldKey === 'total') {
+      // Total = (fuel1_price * quantity) + (fuel2_price * quantity2) + barge_fee
+      const quote = context.quote;
+      if (!quote) return null;
+
+      const fuel1Price = parseFloat(quote.fuel1_price?.replace(/[,$]/g, '') || '0');
+      const fuel2Price = parseFloat(quote.fuel2_price?.replace(/[,$]/g, '') || '0');
+      const bargeFee = parseFloat(quote.barge_fee?.replace(/[,$]/g, '') || '0');
+      const quantity1 = parseFloat(session?.quantity?.replace(/[,MT\s]/gi, '') || '0');
+      const quantity2 = parseFloat(session?.quantity2?.replace(/[,MT\s]/gi, '') || '0');
+
+      if (fuel1Price === 0 && fuel2Price === 0) return null;
+
+      const total = (fuel1Price * quantity1) + (fuel2Price * quantity2) + bargeFee;
+      if (total === 0) return null;
+
+      // 천 단위 콤마 포맷
+      return '$' + total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
     return context.quote?.[fieldKey as keyof typeof context.quote] || null;
   };
@@ -604,7 +631,8 @@ const SellerQuoteComparisonTable = memo(() => {
     }
     const questions: Record<string, Record<string, string>> = {
       barge_fee: { ko: '바지피가 어떻게 되나요?', en: 'What is the barge fee?' },
-      earliest: { ko: '얼리 언제인가요?', en: 'When is the earliest?' }
+      earliest: { ko: '얼리 언제인가요?', en: 'When is the earliest?' },
+      term: { ko: '페이먼트 텀이 어떻게 되나요?', en: 'What are the payment terms?' }
     };
     return questions[fieldKey]?.[lang] || questions[fieldKey]?.['ko'] || '';
   };
@@ -703,17 +731,20 @@ const SellerQuoteComparisonTable = memo(() => {
                   {fields.map((field) => {
                     const value = getFieldValue(seller, field.key);
                     const hasValue = !!value;
+                    const isCalculated = (field as { isCalculated?: boolean }).isCalculated;
 
                     return (
                       <td
                         key={`${seller}-${field.key}`}
-                        onClick={() => !hasValue && handleCellClick(seller, field.key)}
-                        title={!hasValue ? `Click to ask: "${getFieldQuestion(field.key)}"` : value || ''}
+                        onClick={() => !hasValue && !isCalculated && handleCellClick(seller, field.key)}
+                        title={!hasValue && !isCalculated ? `Click to ask: "${getFieldQuestion(field.key)}"` : value || ''}
                         className={cn(
                           "px-2 py-1.5 text-center",
                           hasValue
-                            ? "text-green-700 font-medium"
-                            : "text-gray-400 cursor-pointer hover:bg-red-50"
+                            ? field.key === 'total' ? "text-blue-700 font-bold" : "text-green-700 font-medium"
+                            : isCalculated
+                              ? "text-gray-300"
+                              : "text-gray-400 cursor-pointer hover:bg-red-50"
                         )}
                       >
                         {hasValue ? value : '—'}

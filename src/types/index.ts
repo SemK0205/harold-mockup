@@ -15,6 +15,7 @@ export interface SellerQuoteData {
   fuel2_price?: string;
   fuel3_price?: string;
   barge_fee?: string;
+  term?: string;
 }
 
 export interface SellerContext {
@@ -45,6 +46,7 @@ export interface TradingSession {
   port: string | null;
   fuel_type: string | null;
   vessel_name: string | null;
+  imo: string | null; // IMO number (optional)
   quantity: string | null;
   fuel_type2: string | null;
   quantity2: string | null;
