@@ -694,8 +694,11 @@ const SellerQuoteComparisonTable = memo(() => {
     ...(fuelCount >= 2 ? [{ key: 'fuel2_price', label: `${session?.fuel_type2 || 'Fuel2'} Price` }] : []),
     { key: 'barge_fee', label: 'Barge Fee' },
     { key: 'earliest', label: 'Earliest' },
+    { key: 'supplier', label: 'Supplier' },
     { key: 'term', label: 'Term' },
-    { key: 'total', label: 'Total', isCalculated: true }
+    { key: 'fuel1_margin', label: `${session?.fuel_type || 'Fuel1'} Margin`, isMargin: true },
+    ...(fuelCount >= 2 ? [{ key: 'fuel2_margin', label: `${session?.fuel_type2 || 'Fuel2'} Margin`, isMargin: true }] : []),
+    { key: 'total', label: 'Profit', isCalculated: true }
   ];
 
   // 판매자 컨텍스트 가져오기 (store 우선, 없으면 session)
@@ -713,7 +716,10 @@ const SellerQuoteComparisonTable = memo(() => {
         fuel2_price: context?.quote?.fuel2_price || '',
         barge_fee: context?.quote?.barge_fee || '',
         earliest: context?.earliest || '',
+        supplier: context?.quote?.supplier || '',
         term: context?.quote?.term || '',
+        fuel1_margin: context?.quote?.fuel1_margin || '',
+        fuel2_margin: context?.quote?.fuel2_margin || '',
       };
     });
     setEditValues(values);
@@ -739,6 +745,9 @@ const SellerQuoteComparisonTable = memo(() => {
               fuel2_price: values.fuel2_price || null,
               barge_fee: values.barge_fee || null,
               term: values.term || null,
+              supplier: values.supplier || null,
+              fuel1_margin: values.fuel1_margin || null,
+              fuel2_margin: values.fuel2_margin || null,
             },
             earliest: values.earliest || null,
           })
@@ -756,6 +765,9 @@ const SellerQuoteComparisonTable = memo(() => {
                 fuel2_price: values.fuel2_price || undefined,
                 barge_fee: values.barge_fee || undefined,
                 term: values.term || undefined,
+                supplier: values.supplier || undefined,
+                fuel1_margin: values.fuel1_margin || undefined,
+                fuel2_margin: values.fuel2_margin || undefined,
               },
               earliest: values.earliest || undefined,
             }
@@ -801,6 +813,15 @@ const SellerQuoteComparisonTable = memo(() => {
   // 필드 값 가져오기
   const getFieldValue = (trader: string, fieldKey: string): string | null => {
     const context = getSellerContext(trader);
+
+    // 마진 필드는 DB에서 읽기
+    if (fieldKey === 'fuel1_margin') {
+      return context?.quote?.fuel1_margin || null;
+    }
+    if (fieldKey === 'fuel2_margin') {
+      return context?.quote?.fuel2_margin || null;
+    }
+
     if (!context) return null;
 
     if (fieldKey === 'earliest') {
@@ -809,24 +830,25 @@ const SellerQuoteComparisonTable = memo(() => {
     if (fieldKey === 'term') {
       return context.quote?.term || null;
     }
+    if (fieldKey === 'supplier') {
+      return context.quote?.supplier || null;
+    }
     if (fieldKey === 'total') {
-      // Total = (fuel1_price * quantity) + (fuel2_price * quantity2) + barge_fee
-      const quote = context.quote;
-      if (!quote) return null;
+      // Profit = (fuel1_margin * quantity1) + (fuel2_margin * quantity2)
+      // 마진 기반 예상 수익 계산 (DB에서 읽은 값 사용)
+      const fuel1Margin = parseFloat(context.quote?.fuel1_margin?.replace(/[,$]/g, '') || '0');
+      const fuel2Margin = parseFloat(context.quote?.fuel2_margin?.replace(/[,$]/g, '') || '0');
+      const quantity1 = parseFloat(session?.quantity?.replace(/[,MT\s-]/gi, '').split('-').pop() || '0');
+      const quantity2 = parseFloat(session?.quantity2?.replace(/[,MT\s-]/gi, '').split('-').pop() || '0');
 
-      const fuel1Price = parseFloat(quote.fuel1_price?.replace(/[,$]/g, '') || '0');
-      const fuel2Price = parseFloat(quote.fuel2_price?.replace(/[,$]/g, '') || '0');
-      const bargeFee = parseFloat(quote.barge_fee?.replace(/[,$]/g, '') || '0');
-      const quantity1 = parseFloat(session?.quantity?.replace(/[,MT\s]/gi, '') || '0');
-      const quantity2 = parseFloat(session?.quantity2?.replace(/[,MT\s]/gi, '') || '0');
+      // 마진이 없으면 표시 안함
+      if (fuel1Margin === 0 && fuel2Margin === 0) return null;
 
-      if (fuel1Price === 0 && fuel2Price === 0) return null;
-
-      const total = (fuel1Price * quantity1) + (fuel2Price * quantity2) + bargeFee;
-      if (total === 0) return null;
+      const profit = (fuel1Margin * quantity1) + (fuel2Margin * quantity2);
+      if (profit === 0) return null;
 
       // 천 단위 콤마 포맷
-      return '$' + total.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      return '$' + profit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
     return context.quote?.[fieldKey as keyof typeof context.quote] || null;
   };
@@ -996,18 +1018,25 @@ const SellerQuoteComparisonTable = memo(() => {
         <table className="w-full text-[10px]">
           <thead>
             <tr className="bg-gray-50 border-b">
-              {/* x축: Supplier 열 헤더 + 필드 열들 */}
+              {/* x축: Seller 열 헤더 + 필드 열들 */}
               <th className="px-2 py-1.5 text-left font-medium text-gray-600 sticky left-0 bg-gray-50 min-w-[100px]">
-                Supplier
+                Seller
               </th>
-              {fields.map((field) => (
-                <th
-                  key={field.key}
-                  className="px-2 py-1.5 text-center font-medium text-gray-700 min-w-[80px]"
-                >
-                  {field.label}
-                </th>
-              ))}
+              {fields.map((field) => {
+                const isMargin = (field as { isMargin?: boolean }).isMargin;
+                const isProfit = field.key === 'total';
+                return (
+                  <th
+                    key={field.key}
+                    className={cn(
+                      "px-2 py-1.5 text-center font-medium min-w-[80px]",
+                      isMargin ? "text-purple-700 bg-purple-50" : isProfit ? "text-green-700 bg-green-50" : "text-gray-700"
+                    )}
+                  >
+                    {field.label}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -1032,6 +1061,43 @@ const SellerQuoteComparisonTable = memo(() => {
                     const value = getFieldValue(seller, field.key);
                     const hasValue = !!value;
                     const isCalculated = (field as { isCalculated?: boolean }).isCalculated;
+                    const isMargin = (field as { isMargin?: boolean }).isMargin;
+
+                    // 편집 모드에서 마진 필드
+                    if (isEditing && isMargin) {
+                      return (
+                        <td key={`${seller}-${field.key}`} className="px-1 py-0.5 bg-purple-50">
+                          <input
+                            type="text"
+                            value={editValues[seller]?.[field.key] || ''}
+                            onChange={(e) => setEditValues(prev => ({
+                              ...prev,
+                              [seller]: {
+                                ...prev[seller],
+                                [field.key]: e.target.value
+                              }
+                            }))}
+                            className="w-full px-1 py-0.5 text-[10px] text-center border border-purple-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 bg-white"
+                            placeholder="$0"
+                          />
+                        </td>
+                      );
+                    }
+
+                    // 마진 필드 표시 모드 (편집 아닐 때)
+                    if (isMargin) {
+                      return (
+                        <td
+                          key={`${seller}-${field.key}`}
+                          className={cn(
+                            "px-2 py-1.5 text-center bg-purple-50",
+                            hasValue ? "text-purple-700 font-medium" : "text-gray-400"
+                          )}
+                        >
+                          {hasValue ? value : '—'}
+                        </td>
+                      );
+                    }
 
                     if (isEditing && !isCalculated) {
                       return (
@@ -1061,7 +1127,7 @@ const SellerQuoteComparisonTable = memo(() => {
                         className={cn(
                           "px-2 py-1.5 text-center",
                           hasValue
-                            ? field.key === 'total' ? "text-blue-700 font-bold" : "text-green-700 font-medium"
+                            ? field.key === 'total' ? "text-green-700 font-bold bg-green-50" : "text-green-700 font-medium"
                             : isCalculated
                               ? "text-gray-300"
                               : "text-gray-400 cursor-pointer hover:bg-red-50"
@@ -2019,11 +2085,18 @@ const AIAssistantColumn = memo(() => {
                   <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
                     Loading...
                   </div>
-                ) : quoteHistory.length > 0 ? (
+                ) : (
                   <div className="space-y-2">
-                    {/* 트레이더별로 그룹화 */}
+                    {/* 모든 셀러 표시 (seller_contexts 또는 requested_traders 기준) */}
                     {(() => {
-                      // 트레이더별로 그룹화
+                      // 요청한 모든 셀러 목록 가져오기
+                      const allSellers = storeSellerContexts
+                        ? Object.keys(storeSellerContexts)
+                        : session?.seller_contexts
+                          ? Object.keys(session.seller_contexts)
+                          : session?.requested_traders || [];
+
+                      // 견적 데이터를 트레이더별로 그룹화
                       const groupedByTrader = quoteHistory.reduce((acc, quote) => {
                         const trader = quote.trader_room_name;
                         if (!acc[trader]) acc[trader] = [];
@@ -2031,89 +2104,151 @@ const AIAssistantColumn = memo(() => {
                         return acc;
                       }, {} as Record<string, typeof quoteHistory>);
 
-                      return Object.entries(groupedByTrader).map(([traderRoom, quotes]) => {
-                        // 최신 견적과 이전 견적
-                        const sortedQuotes = [...quotes].sort((a, b) =>
-                          new Date(b.quoted_at).getTime() - new Date(a.quoted_at).getTime()
-                        );
-                        const latestQuote = sortedQuotes[0];
-                        const previousQuotes = sortedQuotes.slice(1);
-
-                        // 가격 변화 계산
-                        const priceChange = previousQuotes.length > 0 && latestQuote.price && previousQuotes[0].price
-                          ? latestQuote.price - previousQuotes[0].price
-                          : null;
-
+                      // 셀러 목록이 없으면 안내 메시지
+                      if (allSellers.length === 0) {
                         return (
-                          <div key={traderRoom} className="border rounded-lg bg-white overflow-hidden">
-                            {/* 트레이더 헤더 + 최신 견적 */}
-                            <div className="p-2 bg-gray-50 border-b">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
-                                  {traderRoom}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {latestQuote.price && (
-                                    <span className="text-sm font-bold text-gray-900">
-                                      ${latestQuote.price.toFixed(2)}
-                                    </span>
-                                  )}
-                                  {priceChange !== null && priceChange !== 0 && (
-                                    <span className={cn(
-                                      "text-xs font-medium px-1.5 py-0.5 rounded",
-                                      priceChange < 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                                    )}>
-                                      {priceChange < 0 ? '↓' : '↑'} ${Math.abs(priceChange).toFixed(2)}
-                                    </span>
-                                  )}
-                                  <Badge variant="outline" className="text-[9px]">
-                                    {quotes.length} quote{quotes.length > 1 ? 's' : ''}
-                                  </Badge>
+                          <div className="h-32 flex items-center justify-center text-gray-500 text-sm border rounded-lg">
+                            No sellers requested yet
+                          </div>
+                        );
+                      }
+
+                      return allSellers.map((traderRoom) => {
+                        const quotes = groupedByTrader[traderRoom] || [];
+                        const hasQuotes = quotes.length > 0;
+                        const sellerContext = getSellerContext(traderRoom);
+                        const status = sellerContext?.status || 'waiting_quote';
+
+                        // 견적이 있는 경우
+                        if (hasQuotes) {
+                          const sortedQuotes = [...quotes].sort((a, b) =>
+                            new Date(b.quoted_at).getTime() - new Date(a.quoted_at).getTime()
+                          );
+                          const latestQuote = sortedQuotes[0];
+                          const previousQuotes = sortedQuotes.slice(1);
+
+                          // 가격 변화 계산
+                          const priceChange = previousQuotes.length > 0 && latestQuote.price && previousQuotes[0].price
+                            ? latestQuote.price - previousQuotes[0].price
+                            : null;
+
+                          return (
+                            <div key={traderRoom} className="border rounded-lg bg-white overflow-hidden">
+                              {/* 트레이더 헤더 + 최신 견적 */}
+                              <div className="p-2 bg-green-50 border-b border-green-100">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
+                                    {traderRoom}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {latestQuote.price && (
+                                      <span className="text-sm font-bold text-gray-900">
+                                        ${latestQuote.price.toFixed(2)}
+                                      </span>
+                                    )}
+                                    {priceChange !== null && priceChange !== 0 && (
+                                      <span className={cn(
+                                        "text-xs font-medium px-1.5 py-0.5 rounded",
+                                        priceChange < 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                      )}>
+                                        {priceChange < 0 ? '↓' : '↑'} ${Math.abs(priceChange).toFixed(2)}
+                                      </span>
+                                    )}
+                                    <Badge variant="outline" className="text-[9px] bg-green-100 text-green-700 border-green-200">
+                                      {quotes.length} quote{quotes.length > 1 ? 's' : ''}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                {/* 최신 견적 상세 */}
+                                <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-gray-500">
+                                  {latestQuote.fuel_type && <span>Fuel: {latestQuote.fuel_type}</span>}
+                                  {latestQuote.quantity && <span>Qty: {latestQuote.quantity}MT</span>}
+                                  {latestQuote.barge_fee && <span>Barge: ${latestQuote.barge_fee}</span>}
+                                  {latestQuote.term && <span>Term: {latestQuote.term}</span>}
+                                  {latestQuote.earliest && <span>Earliest: {latestQuote.earliest}</span>}
+                                </div>
+                                <div className="mt-1 text-[9px] text-gray-400">
+                                  {formatDistanceToNow(new Date(latestQuote.quoted_at), { addSuffix: true })}
                                 </div>
                               </div>
-                              {/* 최신 견적 상세 */}
-                              <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-gray-500">
-                                {latestQuote.fuel_type && <span>Fuel: {latestQuote.fuel_type}</span>}
-                                {latestQuote.quantity && <span>Qty: {latestQuote.quantity}MT</span>}
-                                {latestQuote.barge_fee && <span>Barge: ${latestQuote.barge_fee}</span>}
-                                {latestQuote.term && <span>Term: {latestQuote.term}</span>}
-                                {latestQuote.earliest && <span>Earliest: {latestQuote.earliest}</span>}
-                              </div>
-                              <div className="mt-1 text-[9px] text-gray-400">
-                                {formatDistanceToNow(new Date(latestQuote.quoted_at), { addSuffix: true })}
+
+                              {/* 이전 견적들 (있으면) */}
+                              {previousQuotes.length > 0 && (
+                                <div className="p-2 space-y-1 bg-gray-50/50">
+                                  <div className="text-[9px] text-gray-400 font-medium">Previous Quotes:</div>
+                                  {previousQuotes.slice(0, 3).map((quote) => (
+                                    <div key={quote.id} className="flex items-center justify-between text-[10px] text-gray-500">
+                                      <span>
+                                        {quote.price ? `$${quote.price.toFixed(2)}` : '-'}
+                                        {quote.fuel_type && ` (${quote.fuel_type})`}
+                                      </span>
+                                      <span className="text-gray-400">
+                                        {formatDistanceToNow(new Date(quote.quoted_at), { addSuffix: true })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {previousQuotes.length > 3 && (
+                                    <div className="text-[9px] text-gray-400">
+                                      +{previousQuotes.length - 3} more quotes
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // 견적이 없는 경우 - 상태에 따라 표시
+                        return (
+                          <div key={traderRoom} className="border rounded-lg bg-white overflow-hidden">
+                            <div className={cn(
+                              "p-2 flex items-center justify-between",
+                              status === 'declined' ? "bg-red-50" : "bg-gray-50"
+                            )}>
+                              <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
+                                {traderRoom}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {status === 'waiting_quote' && (
+                                  <>
+                                    <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                                    <Badge variant="outline" className="text-[9px] bg-yellow-50 text-yellow-700 border-yellow-200">
+                                      Waiting
+                                    </Badge>
+                                  </>
+                                )}
+                                {status === 'quoted' && (
+                                  <Badge variant="outline" className="text-[9px] bg-blue-50 text-blue-700 border-blue-200">
+                                    Quoted (no history)
+                                  </Badge>
+                                )}
+                                {status === 'declined' && (
+                                  <Badge variant="outline" className="text-[9px] bg-red-50 text-red-700 border-red-200">
+                                    Declined
+                                  </Badge>
+                                )}
+                                {status === 'renegotiating' && (
+                                  <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 border-purple-200">
+                                    Renegotiating
+                                  </Badge>
+                                )}
+                                {!['waiting_quote', 'quoted', 'declined', 'renegotiating', 'quote_received', 'no_offer'].includes(status) && (
+                                  <Badge variant="outline" className="text-[9px]">
+                                    {status}
+                                  </Badge>
+                                )}
                               </div>
                             </div>
-
-                            {/* 이전 견적들 (있으면) */}
-                            {previousQuotes.length > 0 && (
-                              <div className="p-2 space-y-1 bg-gray-50/50">
-                                <div className="text-[9px] text-gray-400 font-medium">Previous Quotes:</div>
-                                {previousQuotes.slice(0, 3).map((quote) => (
-                                  <div key={quote.id} className="flex items-center justify-between text-[10px] text-gray-500">
-                                    <span>
-                                      {quote.price ? `$${quote.price.toFixed(2)}` : '-'}
-                                      {quote.fuel_type && ` (${quote.fuel_type})`}
-                                    </span>
-                                    <span className="text-gray-400">
-                                      {formatDistanceToNow(new Date(quote.quoted_at), { addSuffix: true })}
-                                    </span>
-                                  </div>
-                                ))}
-                                {previousQuotes.length > 3 && (
-                                  <div className="text-[9px] text-gray-400">
-                                    +{previousQuotes.length - 3} more quotes
-                                  </div>
-                                )}
+                            {/* 연락 시간 표시 */}
+                            {sellerContext?.contacted_at && (
+                              <div className="px-2 py-1 text-[9px] text-gray-400 border-t">
+                                Contacted {formatDistanceToNow(new Date(sellerContext.contacted_at), { addSuffix: true })}
                               </div>
                             )}
                           </div>
                         );
                       });
                     })()}
-                  </div>
-                ) : (
-                  <div className="h-48 flex items-center justify-center text-gray-500 text-sm border rounded-lg">
-                    No quotes recorded yet for this deal
                   </div>
                 )}
               </div>
@@ -2150,8 +2285,11 @@ AIAssistantColumn.displayName = 'AIAssistantColumn';
 const SELLER_STATUS_CONFIG: Record<SellerStatus, { label: string; color: string }> = {
   waiting_quote: { label: "Waiting", color: "bg-yellow-100 text-yellow-800" },
   quote_received: { label: "Quoted", color: "bg-green-100 text-green-800" },
+  quoted: { label: "Quoted", color: "bg-green-100 text-green-800" },
   no_offer: { label: "No Offer", color: "bg-gray-100 text-gray-600" },
-  renegotiating: { label: "Renegotiating", color: "bg-blue-100 text-blue-800" }
+  renegotiating: { label: "Renegotiating", color: "bg-blue-100 text-blue-800" },
+  negotiating: { label: "Negotiating", color: "bg-purple-100 text-purple-800" },
+  declined: { label: "Declined", color: "bg-red-100 text-red-800" }
 };
 
 // Seller Chats Column

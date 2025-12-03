@@ -8,7 +8,7 @@
 // ============================================
 
 // 판매자별 개별 컨텍스트 (각 판매자의 진행 단계)
-export type SellerStatus = "waiting_quote" | "quote_received" | "no_offer" | "renegotiating";
+export type SellerStatus = "waiting_quote" | "quote_received" | "quoted" | "no_offer" | "renegotiating" | "negotiating" | "declined";
 
 export interface SellerQuoteData {
   fuel1_price?: string;
@@ -16,6 +16,9 @@ export interface SellerQuoteData {
   fuel3_price?: string;
   barge_fee?: string;
   term?: string;
+  supplier?: string;        // 정유사 (GS CALTEX, SK ENERGY 등)
+  fuel1_margin?: string;    // 유종1 마진 ($/MT)
+  fuel2_margin?: string;    // 유종2 마진 ($/MT)
 }
 
 export interface SellerContext {
