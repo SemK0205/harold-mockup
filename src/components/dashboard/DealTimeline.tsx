@@ -250,9 +250,9 @@ export function DealTimeline({ deals, onDealClick }: DealTimelineProps) {
               Completed
             </button>
             <button
-              onClick={() => setSelectedStatus("closed_failed")}
+              onClick={() => setSelectedStatus("closed_lost")}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                selectedStatus === "closed_failed"
+                selectedStatus === "closed_lost"
                   ? "bg-red-500 text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}

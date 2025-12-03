@@ -264,7 +264,7 @@ export default function DashboardPage() {
                   <option value="negotiating">Negotiating</option>
                   <option value="no_offer">No Offer</option>
                   <option value="closed_success">Success</option>
-                  <option value="closed_failed">Failed</option>
+                  <option value="closed_lost">Lost</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>

@@ -127,7 +127,7 @@ export function ExportButtons({ filters = {} }: ExportButtonsProps) {
           ? "Negotiating"
           : deal.status === "closed_success"
           ? "Success"
-          : deal.status === "closed_failed"
+          : deal.status === "closed_lost"
           ? "Failed"
           : "Cancelled",
         deal.total_quotes_received || 0,

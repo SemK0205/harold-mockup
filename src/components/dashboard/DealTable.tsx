@@ -28,7 +28,7 @@ const STATUS_OPTIONS: { value: DealScoreboard["status"]; label: string; color: s
   { value: "quoted", label: "Quote Received", color: "bg-purple-500" },
   { value: "negotiating", label: "Negotiating", color: "bg-yellow-500" },
   { value: "closed_success", label: "Completed", color: "bg-green-500" },
-  { value: "closed_failed", label: "Failed", color: "bg-red-500" },
+  { value: "closed_lost", label: "Lost", color: "bg-red-500" },
   { value: "cancelled", label: "Cancelled", color: "bg-gray-500" },
 ];
 
@@ -100,7 +100,7 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
       quoted: "bg-purple-50 hover:bg-purple-100",
       negotiating: "bg-yellow-50 hover:bg-yellow-100",
       closed_success: "bg-green-50 hover:bg-green-100",
-      closed_failed: "bg-red-50 hover:bg-red-100",
+      closed_lost: "bg-red-50 hover:bg-red-100",
       cancelled: "bg-gray-50 hover:bg-gray-100",
     };
     return classes[status];
@@ -113,7 +113,7 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
       quoted: <Badge className="bg-purple-500 text-white">Quote Received</Badge>,
       negotiating: <Badge className="bg-yellow-500 text-black">Negotiating</Badge>,
       closed_success: <Badge className="bg-green-500 text-white">Completed</Badge>,
-      closed_failed: <Badge className="bg-red-500 text-white">Failed</Badge>,
+      closed_lost: <Badge className="bg-red-500 text-white">Lost</Badge>,
       cancelled: <Badge className="bg-gray-500 text-white">Cancelled</Badge>,
     };
     return badges[status];
