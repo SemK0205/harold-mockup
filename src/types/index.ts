@@ -818,41 +818,6 @@ export function getMissingFieldQuestions(fields: InquiryRequiredField[]): string
 }
 
 // ============================================
-// Quote FullContext Types
-// ============================================
-
-export type QuoteType =
-  | "quote_single_no_barge"
-  | "quote_single_with_barge"
-  | "quote_dual_no_barge"
-  | "quote_dual_with_barge"
-  | "quote_triple_no_barge"
-  | "quote_triple_with_barge";
-
-export interface QuoteFullContext {
-  FuelPrice?: string;
-  Fuel1Price?: string;
-  Fuel2Price?: string;
-  Fuel3Price?: string;
-  BargeFee?: string;
-}
-
-// ============================================
-// Renegotiation Types
-// ============================================
-
-export type RenegotiationIssue =
-  | "schedule_issue"
-  | "credit_issue"
-  | "stock_issue"
-  | "price_issue";
-
-export type CustomerFeedbackType =
-  | "earliest_request"
-  | "price_negotiation"
-  | "lost";
-
-// ============================================
 // Deal Scoreboard Types
 // ============================================
 
@@ -868,7 +833,7 @@ export interface DealScoreboard {
   fuel_type2: string | null;
   quantity2: string | null;
   delivery_date: string | null;
-  status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_lost" | "cancelled";
+  status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_lost" | "cancelled" | "no_offer";
   stage?: DealStage; // 새로운 딜 단계
   created_at: string;
   updated_at: string | null;

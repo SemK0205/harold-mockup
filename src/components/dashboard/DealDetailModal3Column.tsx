@@ -63,7 +63,7 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
           <DialogTitle className="sr-only">
             Deal Details - {session.vessel_name || "Vessel TBD"}
           </DialogTitle>
-          <DealDetailModalContent onClose={onClose} />
+          <DealDetailModalContent />
         </DialogContent>
       </Dialog>
     </DealModalProvider>
@@ -71,16 +71,13 @@ export function DealDetailModal({ session, open, onClose }: DealDetailModalProps
 }
 
 // Inner Content Component
-function DealDetailModalContent({ onClose: _onClose }: { onClose: () => void }) {
+function DealDetailModalContent() {
   const {
     session,
     showAIPanel,
     setShowAIPanel,
     setRoomPlatforms
   } = useDealModal();
-
-  // onClose is available via _onClose but currently unused
-  void _onClose;
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -272,7 +269,6 @@ const BuyerChatColumn = memo(() => {
   // SSE Hook for buyer messages
   useSSEManager({
     roomName: session?.customer_room_name,
-    sessionId: session?.session_id,
     onMessage: addBuyerMessage,
     enabled: true
   });

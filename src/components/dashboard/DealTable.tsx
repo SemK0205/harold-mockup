@@ -30,6 +30,7 @@ const STATUS_OPTIONS: { value: DealScoreboard["status"]; label: string; color: s
   { value: "closed_success", label: "Completed", color: "bg-green-500" },
   { value: "closed_lost", label: "Lost", color: "bg-red-500" },
   { value: "cancelled", label: "Cancelled", color: "bg-gray-500" },
+  { value: "no_offer", label: "No Offer", color: "bg-orange-500" },
 ];
 
 export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: DealTableProps) {
@@ -102,6 +103,7 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
       closed_success: "bg-green-50 hover:bg-green-100",
       closed_lost: "bg-red-50 hover:bg-red-100",
       cancelled: "bg-gray-50 hover:bg-gray-100",
+      no_offer: "bg-orange-50 hover:bg-orange-100",
     };
     return classes[status];
   };
@@ -115,6 +117,7 @@ export function DealTable({ deals, onDealClick, onStatusChange, onDelete }: Deal
       closed_success: <Badge className="bg-green-500 text-white">Completed</Badge>,
       closed_lost: <Badge className="bg-red-500 text-white">Lost</Badge>,
       cancelled: <Badge className="bg-gray-500 text-white">Cancelled</Badge>,
+      no_offer: <Badge className="bg-orange-500 text-white">No Offer</Badge>,
     };
     return badges[status];
   };
