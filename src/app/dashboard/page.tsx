@@ -262,6 +262,7 @@ export default function DashboardPage() {
                   <option value="active">Active</option>
                   <option value="quoted">Quoted</option>
                   <option value="negotiating">Negotiating</option>
+                  <option value="no_offer">No Offer</option>
                   <option value="closed_success">Success</option>
                   <option value="closed_failed">Failed</option>
                   <option value="cancelled">Cancelled</option>

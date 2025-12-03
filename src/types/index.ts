@@ -8,7 +8,7 @@
 // ============================================
 
 // 판매자별 개별 컨텍스트 (각 판매자의 진행 단계)
-export type SellerStatus = "waiting_quote" | "quote_received" | "quoted" | "no_offer" | "renegotiating" | "negotiating" | "declined";
+export type SellerStatus = "waiting_quote" | "quote_received" | "no_offer" | "renegotiating" | "negotiating";
 
 export interface SellerQuoteData {
   fuel1_price?: string;
@@ -405,7 +405,7 @@ export function getSellerRequiredFields(
       });
     }
 
-    // Barge Fee (선택사항 - 판매자가 제공하면 추가됨)
+    // Barge Fee (선택사항)
     fields.push({
       key: "barge_fee",
       label: "Barge Fee",
@@ -424,6 +424,48 @@ export function getSellerRequiredFields(
       filled: !!sellerContext?.earliest,
       value: sellerContext?.earliest || undefined
     });
+
+    // Supplier (정유사) - 선택사항
+    fields.push({
+      key: "supplier",
+      label: "Supplier",
+      label_ko: "정유사",
+      required: false,
+      filled: !!quote?.supplier,
+      value: quote?.supplier
+    });
+
+    // Term (결제조건) - 선택사항
+    fields.push({
+      key: "term",
+      label: "Term",
+      label_ko: "결제조건",
+      required: false,
+      filled: !!quote?.term,
+      value: quote?.term
+    });
+
+    // Fuel1 Margin - 선택사항 (마진은 입력값)
+    fields.push({
+      key: "fuel1_margin",
+      label: "Fuel1 Margin",
+      label_ko: "유종1 마진",
+      required: false,
+      filled: !!quote?.fuel1_margin,
+      value: quote?.fuel1_margin
+    });
+
+    // Fuel2 Margin (이종 유종인 경우) - 선택사항
+    if (fuelCount >= 2) {
+      fields.push({
+        key: "fuel2_margin",
+        label: "Fuel2 Margin",
+        label_ko: "유종2 마진",
+        required: false,
+        filled: !!quote?.fuel2_margin,
+        value: quote?.fuel2_margin
+      });
+    }
   }
 
   // 재협상 단계에서 추가 필드
@@ -463,6 +505,43 @@ export function getSellerRequiredFields(
       filled: !!sellerContext?.earliest,
       value: sellerContext?.earliest || undefined
     });
+    // Supplier (정유사) - 선택사항
+    fields.push({
+      key: "supplier",
+      label: "Supplier",
+      label_ko: "정유사",
+      required: false,
+      filled: !!quote?.supplier,
+      value: quote?.supplier
+    });
+    // Term (결제조건) - 선택사항
+    fields.push({
+      key: "term",
+      label: "Term",
+      label_ko: "결제조건",
+      required: false,
+      filled: !!quote?.term,
+      value: quote?.term
+    });
+    // Fuel1 Margin - 선택사항
+    fields.push({
+      key: "fuel1_margin",
+      label: "Fuel1 Margin",
+      label_ko: "유종1 마진",
+      required: false,
+      filled: !!quote?.fuel1_margin,
+      value: quote?.fuel1_margin
+    });
+    if (fuelCount >= 2) {
+      fields.push({
+        key: "fuel2_margin",
+        label: "Fuel2 Margin",
+        label_ko: "유종2 마진",
+        required: false,
+        filled: !!quote?.fuel2_margin,
+        value: quote?.fuel2_margin
+      });
+    }
   }
 
   // 판매측 피드백 단계 - 가격 재협상 응답 대기
@@ -507,14 +586,15 @@ export function areRequiredFieldsFilled(fields: SellerRequiredField[]): boolean 
 
 /**
  * 채워진 필드 개수 / 전체 필드 개수 계산
+ * Seller Quote Matrix의 모든 입력 필드를 카운트 (Profit 제외)
  */
 export function getFieldCompletionRatio(fields: SellerRequiredField[]): { filled: number; total: number; percentage: number } {
-  const requiredFields = fields.filter(f => f.required);
-  const filledCount = requiredFields.filter(f => f.filled).length;
+  // 모든 필드 카운트 (required 여부와 관계없이)
+  const filledCount = fields.filter(f => f.filled).length;
   return {
     filled: filledCount,
-    total: requiredFields.length,
-    percentage: requiredFields.length > 0 ? Math.round((filledCount / requiredFields.length) * 100) : 100
+    total: fields.length,
+    percentage: fields.length > 0 ? Math.round((filledCount / fields.length) * 100) : 100
   };
 }
 
@@ -788,7 +868,7 @@ export interface DealScoreboard {
   fuel_type2: string | null;
   quantity2: string | null;
   delivery_date: string | null;
-  status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_failed" | "cancelled";
+  status: "active" | "quoted" | "negotiating" | "closed_success" | "closed_lost" | "cancelled";
   stage?: DealStage; // 새로운 딜 단계
   created_at: string;
   updated_at: string | null;
