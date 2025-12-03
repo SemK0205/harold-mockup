@@ -1116,8 +1116,8 @@ const AIAssistantColumn = memo(() => {
   };
 
   const [showFullContext, setShowFullContext] = useState(false); // 임시로 숨김 - Seller Quote Matrix로 대체됨
-  // 탭 상태: 'inquiry' | 'price-trends'
-  const [activeTab, setActiveTab] = useState<'inquiry' | 'price-trends'>('inquiry');
+  // 탭 상태: 'inquiry' | 'price-trends' | 'quote-history'
+  const [activeTab, setActiveTab] = useState<'inquiry' | 'price-trends' | 'quote-history'>('inquiry');
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<string>('');
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(0);
@@ -1136,6 +1136,26 @@ const AIAssistantColumn = memo(() => {
     trends: Array<{date: string; avg_price: number | null; min_price: number | null; max_price: number | null; count: number}>;
   }>>([]);
   const [priceTrendLoading, setPriceTrendLoading] = useState(false);
+
+  // Quote History 관련 상태
+  interface QuoteHistoryItem {
+    id: number;
+    session_id: string;
+    trader_room_name: string;
+    fuel_type: string;
+    quantity: number | null;
+    price: number | null;
+    price_unit: string;
+    barge_fee: number | null;
+    earliest: string | null;
+    term: string | null;
+    message: string | null;
+    port: string | null;
+    customer_room_name: string | null;
+    quoted_at: string;
+  }
+  const [quoteHistory, setQuoteHistory] = useState<QuoteHistoryItem[]>([]);
+  const [quoteHistoryLoading, setQuoteHistoryLoading] = useState(false);
 
   // 수동 리마인더 발송 상태 (트레이더별 로딩 상태)
   const [reminderSending, setReminderSending] = useState<Set<string>>(new Set());
@@ -1192,6 +1212,32 @@ const AIAssistantColumn = memo(() => {
       fetchPriceTrends(priceTrendPeriod);
     }
   }, [activeTab, priceTrendPeriod, session?.port, session?.fuel_type, session?.fuel_type2]);
+
+  // Quote History 데이터 가져오기
+  const fetchQuoteHistory = async () => {
+    if (!session?.session_id) return;
+
+    setQuoteHistoryLoading(true);
+    try {
+      const response = await fetch(`${getApiUrl()}/sessions/${session.session_id}/quote-history`);
+      if (response.ok) {
+        const data = await response.json();
+        setQuoteHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch quote history:', error);
+      setQuoteHistory([]);
+    } finally {
+      setQuoteHistoryLoading(false);
+    }
+  };
+
+  // Quote History 탭이 선택되면 데이터 로드
+  useEffect(() => {
+    if (activeTab === 'quote-history' && session?.session_id) {
+      fetchQuoteHistory();
+    }
+  }, [activeTab, session?.session_id]);
 
   // 수동 리마인더 발송
   const sendReminder = async (traderRoomName: string, language: string = "ko") => {
@@ -1629,6 +1675,18 @@ const AIAssistantColumn = memo(() => {
                   Price Trends
                 </button>
               )}
+              <button
+                onClick={() => setActiveTab('quote-history')}
+                className={cn(
+                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 flex items-center justify-center gap-1",
+                  activeTab === 'quote-history'
+                    ? "text-purple-600 border-purple-500 bg-purple-50"
+                    : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
+                )}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Quote History
+              </button>
             </div>
 
             {/* Inquiry Sender 탭 내용 */}
@@ -1937,6 +1995,125 @@ const AIAssistantColumn = memo(() => {
                 ) : (
                   <div className="h-48 flex items-center justify-center text-gray-500 text-sm border rounded-lg">
                     No price data available for this port/fuel combination
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quote History 탭 내용 */}
+            {activeTab === 'quote-history' && (
+              <div className="space-y-3 border rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-600">
+                    Seller Quote History for this Deal
+                  </span>
+                  <button
+                    onClick={fetchQuoteHistory}
+                    className="text-xs text-purple-600 hover:text-purple-800"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {quoteHistoryLoading ? (
+                  <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
+                    Loading...
+                  </div>
+                ) : quoteHistory.length > 0 ? (
+                  <div className="space-y-2">
+                    {/* 트레이더별로 그룹화 */}
+                    {(() => {
+                      // 트레이더별로 그룹화
+                      const groupedByTrader = quoteHistory.reduce((acc, quote) => {
+                        const trader = quote.trader_room_name;
+                        if (!acc[trader]) acc[trader] = [];
+                        acc[trader].push(quote);
+                        return acc;
+                      }, {} as Record<string, typeof quoteHistory>);
+
+                      return Object.entries(groupedByTrader).map(([traderRoom, quotes]) => {
+                        // 최신 견적과 이전 견적
+                        const sortedQuotes = [...quotes].sort((a, b) =>
+                          new Date(b.quoted_at).getTime() - new Date(a.quoted_at).getTime()
+                        );
+                        const latestQuote = sortedQuotes[0];
+                        const previousQuotes = sortedQuotes.slice(1);
+
+                        // 가격 변화 계산
+                        const priceChange = previousQuotes.length > 0 && latestQuote.price && previousQuotes[0].price
+                          ? latestQuote.price - previousQuotes[0].price
+                          : null;
+
+                        return (
+                          <div key={traderRoom} className="border rounded-lg bg-white overflow-hidden">
+                            {/* 트레이더 헤더 + 최신 견적 */}
+                            <div className="p-2 bg-gray-50 border-b">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-gray-700 truncate max-w-[200px]">
+                                  {traderRoom}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  {latestQuote.price && (
+                                    <span className="text-sm font-bold text-gray-900">
+                                      ${latestQuote.price.toFixed(2)}
+                                    </span>
+                                  )}
+                                  {priceChange !== null && priceChange !== 0 && (
+                                    <span className={cn(
+                                      "text-xs font-medium px-1.5 py-0.5 rounded",
+                                      priceChange < 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                    )}>
+                                      {priceChange < 0 ? '↓' : '↑'} ${Math.abs(priceChange).toFixed(2)}
+                                    </span>
+                                  )}
+                                  <Badge variant="outline" className="text-[9px]">
+                                    {quotes.length} quote{quotes.length > 1 ? 's' : ''}
+                                  </Badge>
+                                </div>
+                              </div>
+                              {/* 최신 견적 상세 */}
+                              <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-gray-500">
+                                {latestQuote.fuel_type && <span>Fuel: {latestQuote.fuel_type}</span>}
+                                {latestQuote.quantity && <span>Qty: {latestQuote.quantity}MT</span>}
+                                {latestQuote.barge_fee && <span>Barge: ${latestQuote.barge_fee}</span>}
+                                {latestQuote.term && <span>Term: {latestQuote.term}</span>}
+                                {latestQuote.earliest && <span>Earliest: {latestQuote.earliest}</span>}
+                              </div>
+                              <div className="mt-1 text-[9px] text-gray-400">
+                                {formatDistanceToNow(new Date(latestQuote.quoted_at), { addSuffix: true })}
+                              </div>
+                            </div>
+
+                            {/* 이전 견적들 (있으면) */}
+                            {previousQuotes.length > 0 && (
+                              <div className="p-2 space-y-1 bg-gray-50/50">
+                                <div className="text-[9px] text-gray-400 font-medium">Previous Quotes:</div>
+                                {previousQuotes.slice(0, 3).map((quote) => (
+                                  <div key={quote.id} className="flex items-center justify-between text-[10px] text-gray-500">
+                                    <span>
+                                      {quote.price ? `$${quote.price.toFixed(2)}` : '-'}
+                                      {quote.fuel_type && ` (${quote.fuel_type})`}
+                                    </span>
+                                    <span className="text-gray-400">
+                                      {formatDistanceToNow(new Date(quote.quoted_at), { addSuffix: true })}
+                                    </span>
+                                  </div>
+                                ))}
+                                {previousQuotes.length > 3 && (
+                                  <div className="text-[9px] text-gray-400">
+                                    +{previousQuotes.length - 3} more quotes
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-gray-500 text-sm border rounded-lg">
+                    No quotes recorded yet for this deal
                   </div>
                 )}
               </div>
