@@ -1251,27 +1251,33 @@ const AIAssistantColumn = memo(() => {
 
     const { vessel_name, port, delivery_date, fuel_type, quantity, fuel_type2, quantity2, imo } = session;
 
+    // 수량 포맷팅 (MT 추가)
+    const formatQty = (qty: string | null) => {
+      if (!qty) return '';
+      // 이미 MT가 포함되어 있으면 그대로, 아니면 MT 추가
+      if (qty.toUpperCase().includes('MT')) return qty;
+      return `${qty}MT`;
+    };
+
     if (lang === 'en') {
-      let message = `Hello, could you please provide a quote for the following?\n\n`;
-      message += `Vessel: ${vessel_name || 'TBD'}${imo ? ` (IMO: ${imo})` : ''}\n`;
-      message += `Port: ${port || 'TBD'}\n`;
-      message += `ETA: ${delivery_date || 'TBD'}\n`;
-      message += `Product 1: ${fuel_type || 'TBD'} ${quantity || 'TBD'}\n`;
+      let message = `${vessel_name || 'TBD'}${imo ? ` (IMO: ${imo})` : ''}\n`;
+      message += `${port || 'TBD'}\n`;
+      message += `${delivery_date || 'TBD'}\n`;
+      message += `${fuel_type || 'TBD'} ${formatQty(quantity)}\n`;
       if (fuel_type2) {
-        message += `Product 2: ${fuel_type2} ${quantity2 || 'TBD'}\n`;
+        message += `${fuel_type2} ${formatQty(quantity2)}\n`;
       }
-      message += `\nPlease advise earliest delivery and best price. Thank you!`;
+      message += `\nPlease advise earliest and price. Thank you!`;
       return message;
     } else {
-      let message = `안녕하세요, 아래 건 견적 부탁드립니다.\n\n`;
-      message += `선박: ${vessel_name || 'TBD'}${imo ? ` (IMO: ${imo})` : ''}\n`;
-      message += `항구: ${port || 'TBD'}\n`;
-      message += `ETA: ${delivery_date || 'TBD'}\n`;
-      message += `유종1: ${fuel_type || 'TBD'} ${quantity || 'TBD'}\n`;
+      let message = `${vessel_name || 'TBD'}${imo ? ` (IMO: ${imo})` : ''}\n`;
+      message += `${port || 'TBD'}\n`;
+      message += `${delivery_date || 'TBD'}\n`;
+      message += `${fuel_type || 'TBD'} ${formatQty(quantity)}\n`;
       if (fuel_type2) {
-        message += `유종2: ${fuel_type2} ${quantity2 || 'TBD'}\n`;
+        message += `${fuel_type2} ${formatQty(quantity2)}\n`;
       }
-      message += `\n얼리 및 가격 확인 부탁드립니다. 감사합니다!`;
+      message += `\n상기 건 얼리 및 가격 확인 부탁드립니다. 감사합니다!`;
       return message;
     }
   };
