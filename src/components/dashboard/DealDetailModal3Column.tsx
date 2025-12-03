@@ -116,22 +116,22 @@ function DealDetailModalContent({ onClose: _onClose }: { onClose: () => void }) 
         onToggleAI={() => setShowAIPanel(true)}
       />
 
-      {/* 3-Column Layout - 고정 비율 28:45:27 */}
+      {/* 3-Column Layout - 고정 비율 24:52:24 */}
       <div ref={containerRef} className="flex flex-1 relative overflow-hidden">
-        {/* Buyer Chat Column - 28% */}
-        <div className="border-r h-full" style={{ width: '28%' }}>
+        {/* Buyer Chat Column - 24% */}
+        <div className="border-r h-full" style={{ width: '24%' }}>
           <BuyerChatColumn />
         </div>
 
-        {/* AI Assistant Column - 45% */}
+        {/* AI Assistant Column - 52% */}
         {showAIPanel && (
-          <div className="border-r bg-gray-50 h-full" style={{ width: '45%' }}>
+          <div className="border-r bg-gray-50 h-full" style={{ width: '52%' }}>
             <AIAssistantColumn />
           </div>
         )}
 
-        {/* Seller Chats Column - 27% (or 72% when AI hidden) */}
-        <div className="h-full" style={{ width: showAIPanel ? '27%' : '72%' }}>
+        {/* Seller Chats Column - 24% (or 76% when AI hidden) */}
+        <div className="h-full" style={{ width: showAIPanel ? '24%' : '76%' }}>
           <SellerChatsColumn />
         </div>
       </div>
@@ -1244,6 +1244,47 @@ const AIAssistantColumn = memo(() => {
     };
     fetchAllTraders();
   }, []);
+
+  // 인쿼리 메시지 자동 생성 함수
+  const generateInquiryMessage = (lang: 'ko' | 'en' = 'ko'): string => {
+    if (!session) return '';
+
+    const { vessel_name, port, delivery_date, fuel_type, quantity, fuel_type2, quantity2, imo } = session;
+
+    if (lang === 'en') {
+      let message = `Hello, could you please provide a quote for the following?\n\n`;
+      message += `Vessel: ${vessel_name || 'TBD'}${imo ? ` (IMO: ${imo})` : ''}\n`;
+      message += `Port: ${port || 'TBD'}\n`;
+      message += `ETA: ${delivery_date || 'TBD'}\n`;
+      message += `Product 1: ${fuel_type || 'TBD'} ${quantity || 'TBD'}\n`;
+      if (fuel_type2) {
+        message += `Product 2: ${fuel_type2} ${quantity2 || 'TBD'}\n`;
+      }
+      message += `\nPlease advise earliest delivery and best price. Thank you!`;
+      return message;
+    } else {
+      let message = `안녕하세요, 아래 건 견적 부탁드립니다.\n\n`;
+      message += `선박: ${vessel_name || 'TBD'}${imo ? ` (IMO: ${imo})` : ''}\n`;
+      message += `항구: ${port || 'TBD'}\n`;
+      message += `ETA: ${delivery_date || 'TBD'}\n`;
+      message += `유종1: ${fuel_type || 'TBD'} ${quantity || 'TBD'}\n`;
+      if (fuel_type2) {
+        message += `유종2: ${fuel_type2} ${quantity2 || 'TBD'}\n`;
+      }
+      message += `\n얼리 및 가격 확인 부탁드립니다. 감사합니다!`;
+      return message;
+    }
+  };
+
+  // 세션 데이터 변경 시 기본 인쿼리 메시지 생성 (aiSuggestions가 없을 때)
+  useEffect(() => {
+    if (!session) return;
+    // aiSuggestions가 없고, editingMessage가 비어있으면 기본 메시지 생성
+    if (aiSuggestions.length === 0 && !editingMessage) {
+      const defaultMessage = generateInquiryMessage('ko');
+      setEditingMessage(defaultMessage);
+    }
+  }, [session, aiSuggestions.length]);
 
   // Price Trends 데이터 가져오기 (fuel_type2도 함께 조회)
   const fetchPriceTrends = async (period: "3m" | "6m" | "1y") => {
