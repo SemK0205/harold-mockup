@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 49234",
     "lint": "eslint",
-    "export": "next export",
-    "deploy": "next build && next export && gh-pages -d out"
+    "deploy": "next build && gh-pages -d out"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
