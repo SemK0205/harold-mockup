@@ -836,7 +836,7 @@ const BuyerVesselHistory = memo(({ customerRoom, vesselName, currentSessionId }:
                     inquiry.status === 'no_offer' ? "bg-gray-100 text-gray-600" :
                     "bg-gray-100 text-gray-600"
                   )}>
-                    {inquiry.status === 'closed_success' ? 'Won' :
+                    {inquiry.status === 'closed_success' ? 'Done' :
                      inquiry.status === 'closed_lost' ? 'Lost' :
                      inquiry.status === 'closed_failed' ? 'Failed' :
                      inquiry.status === 'active' ? 'Active' :

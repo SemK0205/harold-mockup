@@ -22,7 +22,6 @@ export function Header() {
   const navItems = [
     { name: "Deal Board", href: "/dashboard" },
     { name: "Chat Manager", href: "/chats" },
-    { name: "Customers", href: "/customers" },
     { name: "Aggregation", href: "/aggregation" },
     { name: "Statistics", href: "/statistics" },
     { name: "Settlement", href: "/settlement" },
