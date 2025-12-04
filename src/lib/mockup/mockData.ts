@@ -739,7 +739,7 @@ export const MOCK_DEALS: DealScoreboard[] = [
     selected_trader: FAKE_SELLERS.SEAFUEL,
     closing_reason: "Best price and earliest delivery",
     total_quotes_received: 3,
-    negotiation_rounds: 1,
+    negotiation_rounds: 1,  // 2nd round (0=1st, 1=2nd, 2=3rd)
     duration_minutes: 1080,
     response_time_minutes: 38,
     quote_count: 3,
@@ -784,7 +784,7 @@ export const MOCK_DEALS: DealScoreboard[] = [
     selected_trader: FAKE_SELLERS.ASIAENERGY,
     closing_reason: "Competitive price with good terms",
     total_quotes_received: 2,
-    negotiation_rounds: 0,
+    negotiation_rounds: 2,  // 3rd round (0=1st, 1=2nd, 2=3rd)
     duration_minutes: 1440,
     response_time_minutes: 45,
     quote_count: 2,
@@ -794,9 +794,9 @@ export const MOCK_DEALS: DealScoreboard[] = [
       [FAKE_SELLERS.ASIAENERGY]: {
         status: "quote_received",
         quote: {
-          fuel1_price: "$562/MT",  // VLSFO
+          fuel1_price: "$562/MT",  // VLSFO - 3rd round, negotiated down
           fuel2_price: "$708/MT",  // MGO
-          barge_fee: "$17,000",
+          barge_fee: "$1300",
           term: "15 days",
           supplier: FAKE_SELLERS.ASIAENERGY,
           fuel1_margin: "$18/MT",
@@ -831,7 +831,7 @@ export const MOCK_DEALS: DealScoreboard[] = [
     selected_trader: FAKE_SELLERS.SUNPETRO,
     closing_reason: "Long-term relationship",
     total_quotes_received: 2,
-    negotiation_rounds: 0,
+    negotiation_rounds: 0,  // 1st round - accepted first quote
     duration_minutes: 1680,
     response_time_minutes: 32,
     quote_count: 2,
