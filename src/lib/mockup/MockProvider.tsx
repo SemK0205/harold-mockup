@@ -245,25 +245,46 @@ export function MockProvider({ children }: MockProviderProps) {
           const deal = deals.find(d => d.session_id === sessionId);
 
           if (deal && deal.seller_contexts) {
-            // seller_contexts에서 quote history 생성
-            const history = Object.entries(deal.seller_contexts)
+            // negotiation_rounds에 따라 여러 라운드의 견적 생성
+            const rounds = deal.negotiation_rounds || 0;
+            const history: any[] = [];
+            let idCounter = 1;
+
+            Object.entries(deal.seller_contexts)
               .filter(([_, ctx]) => ctx.quote?.fuel1_price)
-              .map(([trader, ctx], idx) => ({
-                id: idx + 1,
-                session_id: sessionId,
-                trader_room_name: trader,
-                fuel_type: deal.fuel_type || '',
-                quantity: parseFloat(deal.quantity?.replace(/[^\d.]/g, '') || '0') || null,
-                price: parseFloat(ctx.quote?.fuel1_price?.replace(/[^\d.]/g, '') || '0') || null,
-                price_unit: 'USD/MT',
-                barge_fee: parseFloat(ctx.quote?.barge_fee?.replace(/[^\d.]/g, '') || '0') || null,
-                earliest: ctx.earliest || null,
-                term: ctx.quote?.term || null,
-                message: null,
-                port: deal.port || null,
-                customer_room_name: deal.customer_room_name || null,
-                quoted_at: ctx.received_at || new Date().toISOString(),
-              }));
+              .forEach(([trader, ctx]) => {
+                const basePrice = parseFloat(ctx.quote?.fuel1_price?.replace(/[^\d.]/g, '') || '0');
+                const baseFuel2Price = ctx.quote?.fuel2_price ? parseFloat(ctx.quote.fuel2_price.replace(/[^\d.]/g, '') || '0') : null;
+
+                // 각 라운드마다 견적 생성 (0부터 rounds까지)
+                for (let round = 0; round <= rounds; round++) {
+                  // 라운드가 올라갈수록 가격이 조금씩 낮아짐
+                  const priceReduction = round * 3; // 라운드당 $3/MT 감소
+                  const fuel2Reduction = round * 2; // 라운드당 $2/MT 감소
+
+                  history.push({
+                    id: idCounter++,
+                    session_id: sessionId,
+                    trader_room_name: trader,
+                    fuel_type: deal.fuel_type || '',
+                    quantity: parseFloat(deal.quantity?.replace(/[^\d.]/g, '') || '0') || null,
+                    price: basePrice + (rounds - round) * 3, // 마지막 라운드가 가장 낮은 가격
+                    fuel2_price: baseFuel2Price ? baseFuel2Price + (rounds - round) * 2 : null,
+                    price_unit: 'USD/MT',
+                    barge_fee: parseFloat(ctx.quote?.barge_fee?.replace(/[^\d.]/g, '') || '0') || null,
+                    earliest: ctx.earliest || null,
+                    term: ctx.quote?.term || null,
+                    message: null,
+                    port: deal.port || null,
+                    customer_room_name: deal.customer_room_name || null,
+                    quoted_at: new Date(new Date(ctx.received_at || new Date()).getTime() - (rounds - round) * 60 * 60 * 1000).toISOString(),
+                    round: round + 1, // 1st, 2nd, 3rd
+                  });
+                }
+              });
+
+            // quoted_at 기준으로 정렬 (오래된 것부터)
+            history.sort((a, b) => new Date(a.quoted_at).getTime() - new Date(b.quoted_at).getTime());
 
             return new Response(JSON.stringify({ history }), {
               status: 200,
