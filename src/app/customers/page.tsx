@@ -9,10 +9,8 @@ import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Users,
   Search,
@@ -24,7 +22,6 @@ import {
   ChevronRight,
   Loader2,
   CheckCircle,
-  XCircle,
 } from "lucide-react";
 import {
   customerAPI,
