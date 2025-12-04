@@ -88,7 +88,10 @@ interface MockProviderProps {
 
 export function MockProvider({ children }: MockProviderProps) {
   // State
-  const [deals, setDeals] = useState<DealScoreboard[]>(MOCK_DEALS);
+  const [deals, setDeals] = useState<DealScoreboard[]>(
+    // 최신 순으로 정렬 (created_at 내림차순)
+    [...MOCK_DEALS].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  );
   const [chatRooms] = useState<RoomInfo[]>(MOCK_CHAT_ROOMS);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(MOCK_MESSAGES);
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, AISuggestion[]>>(MOCK_AI_SUGGESTIONS);
@@ -342,16 +345,46 @@ export function MockProvider({ children }: MockProviderProps) {
       if (url.includes('/ai-suggestions/approve') && init?.method === 'POST') {
         try {
           const body = JSON.parse(init.body as string);
-          const { selected_targets, modified_message } = body;
+          const { suggestion_id, selected_targets, modified_message } = body;
 
           // selected_targets 형식: { "1": ["SunPetro Energy", "SeaFuel Korea"] }
           const targetRooms = Object.values(selected_targets || {}).flat() as string[];
+
+          // Suggestion에서 session_id 찾기
+          const suggestion = suggestions.find(s => s.id === suggestion_id);
+          const sessionId = suggestion?.session_id;
 
           // 즉시 성공 응답
           const response = new Response(JSON.stringify({ success: true }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
+
+          // Deal의 seller_contexts 업데이트 (Seller Matrix에 추가)
+          if (sessionId) {
+            setDeals(prev => prev.map(deal => {
+              if (deal.session_id === sessionId) {
+                const newSellerContexts = { ...deal.seller_contexts };
+                targetRooms.forEach(traderRoom => {
+                  if (!newSellerContexts[traderRoom]) {
+                    newSellerContexts[traderRoom] = {
+                      status: "waiting_quote",
+                      quote: null,
+                      requested_at: new Date().toISOString(),
+                      contacted_at: new Date().toISOString(),
+                    };
+                  }
+                });
+                return {
+                  ...deal,
+                  seller_contexts: newSellerContexts,
+                  requested_traders: [...new Set([...(deal.requested_traders || []), ...targetRooms])],
+                  stage: 'deal_started',
+                };
+              }
+              return deal;
+            }));
+          }
 
           // 각 판매자에게 인쿼리 메시지 전송 (시뮬레이션)
           targetRooms.forEach((traderRoom, idx) => {
