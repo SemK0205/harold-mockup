@@ -350,10 +350,12 @@ export function MockProvider({ children }: MockProviderProps) {
           // selected_targets 형식: { "1": ["SunPetro Energy", "SeaFuel Korea"] }
           const targetRooms = Object.values(selected_targets || {}).flat() as string[];
 
-          // Suggestion에서 session_id 찾기
+          // Suggestion에서 room_name 찾기, 그 room_name으로 deal 찾기
           const allSuggestions = Object.values(aiSuggestions).flat();
           const suggestion = allSuggestions.find(s => s.id === suggestion_id);
-          const sessionId = suggestion?.session_id;
+          const roomName = suggestion?.room_name;
+          const deal = roomName ? deals.find(d => d.customer_room_name === roomName) : null;
+          const sessionId = deal?.session_id;
 
           // 즉시 성공 응답
           const response = new Response(JSON.stringify({ success: true }), {
