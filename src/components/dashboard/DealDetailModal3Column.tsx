@@ -33,7 +33,8 @@ import {
   Pencil,
   Check,
   TrendingUp,
-  Bell
+  Bell,
+  Ship
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
@@ -187,10 +188,9 @@ DealHeader.displayName = 'DealHeader';
 const BuyerChatColumn = memo(() => {
   const { session, buyerMessages, addBuyerMessage, setBuyerMessages, getRoomPlatform, roomPlatforms } = useDealModal();
   const [inputValue, setInputValue] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
-  const isFirstLoadRef = useRef(true);
+  const prevMessagesLengthRef = useRef<number>(0);
 
   // Load initial messages - wait for roomPlatforms to be loaded
   useEffect(() => {
@@ -274,15 +274,23 @@ const BuyerChatColumn = memo(() => {
     enabled: true
   });
 
-  // Auto scroll to bottom - instant on first load, smooth on updates
+  // Auto scroll to bottom on messages loaded
   useEffect(() => {
-    if (buyerMessages.length > 0) {
-      if (isFirstLoadRef.current) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-        isFirstLoadRef.current = false;
-      } else {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+
+    if (viewport && buyerMessages.length > 0) {
+      // 메시지가 로드되었을 때 (0 -> N) 또는 새 메시지가 추가되었을 때
+      const isInitialLoad = prevMessagesLengthRef.current === 0 && buyerMessages.length > 0;
+      const isNewMessage = buyerMessages.length > prevMessagesLengthRef.current;
+
+      if (isInitialLoad || isNewMessage) {
+        // setTimeout으로 DOM 렌더링 완료 후 스크롤
+        setTimeout(() => {
+          viewport.scrollTop = viewport.scrollHeight;
+        }, 50);
       }
+
+      prevMessagesLengthRef.current = buyerMessages.length;
     }
   }, [buyerMessages]);
 
@@ -348,12 +356,11 @@ const BuyerChatColumn = memo(() => {
       {/* Required FullContext for Buyer */}
       <BuyerRequiredFullContext session={session} />
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="space-y-3">
           {buyerMessages.map((msg) => (
             <MessageBubble key={msg.message_id} message={msg} />
           ))}
-          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
@@ -711,6 +718,7 @@ const SellerQuoteComparisonTable = memo(() => {
   // 유종 개수에 따른 필드 결정
   const fuelCount = session?.fuel_type2 ? 2 : 1;
   const fields = [
+    { key: 'deal_total', label: 'TOTAL', isCalculated: true },
     { key: 'fuel1_price', label: `${session?.fuel_type || 'Fuel1'} Price` },
     ...(fuelCount >= 2 ? [{ key: 'fuel2_price', label: `${session?.fuel_type2 || 'Fuel2'} Price` }] : []),
     { key: 'barge_fee', label: 'Barge Fee' },
@@ -896,6 +904,41 @@ const SellerQuoteComparisonTable = memo(() => {
     if (fieldKey === 'supplier') {
       return context.quote?.supplier || null;
     }
+
+    // 수량 파싱 헬퍼 함수: "1000-1200MT" → 중간값 1100 사용
+    const parseQuantity = (qty: string | null | undefined): number => {
+      if (!qty) return 0;
+      const parts = qty.split('-');
+      if (parts.length >= 2) {
+        // 범위인 경우 중간값 사용
+        const min = parseFloat(parts[0].replace(/[^0-9.]/g, '') || '0');
+        const max = parseFloat(parts[1].replace(/[^0-9.]/g, '') || '0');
+        return isNaN(min) || isNaN(max) ? 0 : (min + max) / 2;
+      }
+      // 단일 값인 경우
+      const num = parseFloat(qty.replace(/[^0-9.]/g, '') || '0');
+      return isNaN(num) ? 0 : num;
+    };
+
+    if (fieldKey === 'deal_total') {
+      // TOTAL = (fuel1_price × quantity1) + (fuel2_price × quantity2) + barge_fee
+      const fuel1Price = parseFloat(context.quote?.fuel1_price?.replace(/[,$]/g, '') || '0');
+      const fuel2Price = parseFloat(context.quote?.fuel2_price?.replace(/[,$]/g, '') || '0');
+      const bargeFee = parseFloat(context.quote?.barge_fee?.replace(/[,$]/g, '') || '0');
+
+      // 가격이 없으면 표시 안함
+      if (fuel1Price === 0 && fuel2Price === 0) return null;
+
+      const quantity1 = parseQuantity(session?.quantity);
+      const quantity2 = parseQuantity(session?.quantity2);
+
+      const dealTotal = (fuel1Price * quantity1) + (fuel2Price * quantity2) + bargeFee;
+      if (dealTotal === 0) return null;
+
+      // 천 단위 콤마 포맷
+      return '$' + dealTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+
     if (fieldKey === 'total') {
       // Profit = (fuel1_margin * quantity1) + (fuel2_margin * quantity2)
       // 마진 기반 예상 수익 계산 (DB에서 읽은 값 사용)
@@ -904,21 +947,6 @@ const SellerQuoteComparisonTable = memo(() => {
 
       // 마진이 없으면 표시 안함
       if (fuel1Margin === 0 && fuel2Margin === 0) return null;
-
-      // 수량 파싱: "1000-1200MT" → 중간값 1100 사용
-      const parseQuantity = (qty: string | null | undefined): number => {
-        if (!qty) return 0;
-        const parts = qty.split('-');
-        if (parts.length >= 2) {
-          // 범위인 경우 중간값 사용
-          const min = parseFloat(parts[0].replace(/[^0-9.]/g, '') || '0');
-          const max = parseFloat(parts[1].replace(/[^0-9.]/g, '') || '0');
-          return isNaN(min) || isNaN(max) ? 0 : (min + max) / 2;
-        }
-        // 단일 값인 경우
-        const num = parseFloat(qty.replace(/[^0-9.]/g, '') || '0');
-        return isNaN(num) ? 0 : num;
-      };
 
       const quantity1 = parseQuantity(session?.quantity);
       const quantity2 = parseQuantity(session?.quantity2);
@@ -1104,13 +1132,17 @@ const SellerQuoteComparisonTable = memo(() => {
               </th>
               {fields.map((field) => {
                 const isMargin = (field as { isMargin?: boolean }).isMargin;
+                const isDealTotal = field.key === 'deal_total';
                 const isProfit = field.key === 'total';
                 return (
                   <th
                     key={field.key}
                     className={cn(
                       "px-2 py-1.5 text-center font-medium min-w-[80px]",
-                      isMargin ? "text-purple-700 bg-purple-50" : isProfit ? "text-green-700 bg-green-50" : "text-gray-700"
+                      isMargin ? "text-purple-700 bg-purple-50" :
+                      isDealTotal ? "text-blue-700 bg-blue-50" :
+                      isProfit ? "text-green-700 bg-green-50" :
+                      "text-gray-700"
                     )}
                   >
                     {field.label}
@@ -1238,7 +1270,9 @@ const SellerQuoteComparisonTable = memo(() => {
                         className={cn(
                           "px-2 py-1.5 text-center",
                           hasValue
-                            ? field.key === 'total' ? "text-green-700 font-bold bg-green-50" : "text-green-700 font-medium"
+                            ? field.key === 'deal_total' ? "text-blue-700 font-bold bg-blue-50" :
+                              field.key === 'total' ? "text-green-700 font-bold bg-green-50" :
+                              "text-green-700 font-medium"
                             : isCalculated
                               ? "text-gray-300"
                               : "text-gray-400 cursor-pointer hover:bg-red-50"
@@ -1293,8 +1327,8 @@ const AIAssistantColumn = memo(() => {
   };
 
   const [showFullContext, setShowFullContext] = useState(false); // 임시로 숨김 - Seller Quote Matrix로 대체됨
-  // 탭 상태: 'inquiry' | 'price-trends' | 'quote-history'
-  const [activeTab, setActiveTab] = useState<'inquiry' | 'price-trends' | 'quote-history'>('inquiry');
+  // 탭 상태: 'inquiry' | 'price-trends' | 'quote-history' | 'buyer-info'
+  const [activeTab, setActiveTab] = useState<'inquiry' | 'price-trends' | 'quote-history' | 'buyer-info'>('quote-history');
   const [expandedSuggestion, setExpandedSuggestion] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<string>('');
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number>(0);
@@ -1333,6 +1367,50 @@ const AIAssistantColumn = memo(() => {
   }
   const [quoteHistory, setQuoteHistory] = useState<QuoteHistoryItem[]>([]);
   const [quoteHistoryLoading, setQuoteHistoryLoading] = useState(false);
+
+  // Buyer Info 관련 상태
+  interface BuyerVessel {
+    vessel_name: string;
+    imo: string | null;
+    inquiry_count: number;
+    last_inquiry_date: string | null;
+  }
+  interface InquiryHistoryItem {
+    session_id: string;
+    inquiry_date: string | null;
+    port: string | null;
+    eta: string | null;
+    fuel1: string | null;
+    fuel1_qty: string | null;
+    fuel2: string | null;
+    fuel2_qty: string | null;
+    status: string | null;
+    offers: Array<{
+      trader: string;
+      price: string;
+      fuel1_price: string | null;
+      fuel2_price: string | null;
+      barge_fee: string | null;
+      fuel1_margin: string | null;
+      fuel2_margin: string | null;
+    }>;
+    purchase_prices: Array<{
+      trader: string;
+      price: string;
+    }>;
+    deal_done_price: string | null;
+    selected_trader: string | null;
+    margin_per_ton: Array<{
+      trader: string;
+      fuel1_margin?: string;
+      fuel2_margin?: string;
+    }>;
+  }
+  const [buyerVessels, setBuyerVessels] = useState<BuyerVessel[]>([]);
+  const [buyerVesselsLoading, setBuyerVesselsLoading] = useState(false);
+  const [selectedBuyerVessel, setSelectedBuyerVessel] = useState<string | null>(null);
+  const [inquiryHistory, setInquiryHistory] = useState<InquiryHistoryItem[]>([]);
+  const [inquiryHistoryLoading, setInquiryHistoryLoading] = useState(false);
 
   // 수동 리마인더 발송 상태 (트레이더별 로딩 상태)
   const [reminderSending, setReminderSending] = useState<Set<string>>(new Set());
@@ -1462,6 +1540,66 @@ const AIAssistantColumn = memo(() => {
       fetchQuoteHistory();
     }
   }, [activeTab, session?.session_id]);
+
+  // Buyer Info - 구매자의 배 목록 가져오기
+  const fetchBuyerVessels = async () => {
+    if (!session?.customer_room_name) return;
+
+    setBuyerVesselsLoading(true);
+    try {
+      const response = await fetch(`${getApiUrl()}/customers/${encodeURIComponent(session.customer_room_name)}/vessels`);
+      if (response.ok) {
+        const data = await response.json();
+        setBuyerVessels(data.vessels || []);
+        // 현재 세션의 배가 있으면 자동 선택
+        if (session.vessel_name && data.vessels?.some((v: BuyerVessel) => v.vessel_name === session.vessel_name)) {
+          setSelectedBuyerVessel(session.vessel_name);
+        } else if (data.vessels?.length > 0) {
+          setSelectedBuyerVessel(data.vessels[0].vessel_name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch buyer vessels:', error);
+      setBuyerVessels([]);
+    } finally {
+      setBuyerVesselsLoading(false);
+    }
+  };
+
+  // Buyer Info - 선택된 배의 인쿼리 히스토리 가져오기
+  const fetchInquiryHistory = async (vesselName: string) => {
+    if (!session?.customer_room_name || !vesselName) return;
+
+    setInquiryHistoryLoading(true);
+    try {
+      const response = await fetch(
+        `${getApiUrl()}/customers/${encodeURIComponent(session.customer_room_name)}/vessels/${encodeURIComponent(vesselName)}/history`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setInquiryHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch inquiry history:', error);
+      setInquiryHistory([]);
+    } finally {
+      setInquiryHistoryLoading(false);
+    }
+  };
+
+  // Buyer Info 탭이 선택되면 데이터 로드
+  useEffect(() => {
+    if (activeTab === 'buyer-info' && session?.customer_room_name) {
+      fetchBuyerVessels();
+    }
+  }, [activeTab, session?.customer_room_name]);
+
+  // 선택된 배가 변경되면 인쿼리 히스토리 로드
+  useEffect(() => {
+    if (activeTab === 'buyer-info' && selectedBuyerVessel) {
+      fetchInquiryHistory(selectedBuyerVessel);
+    }
+  }, [activeTab, selectedBuyerVessel]);
 
   // 수동 리마인더 발송
   const sendReminder = async (traderRoomName: string, language: string = "ko") => {
@@ -1875,15 +2013,16 @@ const AIAssistantColumn = memo(() => {
             {/* 탭 헤더 */}
             <div className="flex border-b">
               <button
-                onClick={() => setActiveTab('inquiry')}
+                onClick={() => setActiveTab('quote-history')}
                 className={cn(
-                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2",
-                  activeTab === 'inquiry'
-                    ? "text-blue-600 border-blue-500 bg-blue-50"
+                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 flex items-center justify-center gap-1",
+                  activeTab === 'quote-history'
+                    ? "text-purple-600 border-purple-500 bg-purple-50"
                     : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
                 )}
               >
-                Inquiry Sender
+                <MessageSquare className="w-4 h-4" />
+                Quote History
               </button>
               {session?.port && session?.fuel_type && (
                 <button
@@ -1900,16 +2039,27 @@ const AIAssistantColumn = memo(() => {
                 </button>
               )}
               <button
-                onClick={() => setActiveTab('quote-history')}
+                onClick={() => setActiveTab('inquiry')}
                 className={cn(
-                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 flex items-center justify-center gap-1",
-                  activeTab === 'quote-history'
-                    ? "text-purple-600 border-purple-500 bg-purple-50"
+                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2",
+                  activeTab === 'inquiry'
+                    ? "text-blue-600 border-blue-500 bg-blue-50"
                     : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
                 )}
               >
-                <MessageSquare className="w-4 h-4" />
-                Quote History
+                Inquiry Sender
+              </button>
+              <button
+                onClick={() => setActiveTab('buyer-info')}
+                className={cn(
+                  "flex-1 px-3 py-2 text-sm font-medium transition-colors border-b-2 flex items-center justify-center gap-1",
+                  activeTab === 'buyer-info'
+                    ? "text-orange-600 border-orange-500 bg-orange-50"
+                    : "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50"
+                )}
+              >
+                <Ship className="w-4 h-4" />
+                Buyer Info
               </button>
             </div>
 
@@ -2359,15 +2509,57 @@ const AIAssistantColumn = memo(() => {
                                   >
                                     {shortenName(traderRoom)}
                                   </td>
-                                  {/* 각 라운드 가격 */}
+                                  {/* 각 라운드 가격 (판매측/고객측) */}
                                   {Array.from({ length: maxRounds }, (_, i) => {
                                     const quote = quotes[i];
+
+                                    // 고객 가격 계산 (마진 포함)
+                                    const getCustomerPrice = () => {
+                                      if (!quote || !sellerContext?.quote) return null;
+                                      const ctx = sellerContext.quote;
+                                      const fuel1Margin = ctx.fuel1_margin;
+                                      const fuel2Margin = ctx.fuel2_margin;
+
+                                      if (!fuel1Margin && !fuel2Margin) return null;
+
+                                      try {
+                                        const fuel1Price = quote.price || 0;
+                                        const margin1 = parseFloat((fuel1Margin || '0').replace(/[^\d.]/g, ''));
+                                        let customerPrice = (fuel1Price + margin1).toFixed(0);
+
+                                        // Fuel2
+                                        const fuel2Price = ctx.fuel2_price;
+                                        if (fuel2Price && fuel2Margin) {
+                                          const fuel2Base = parseFloat(fuel2Price.replace(/[^\d.]/g, ''));
+                                          const margin2 = parseFloat(fuel2Margin.replace(/[^\d.]/g, ''));
+                                          customerPrice += `/${(fuel2Base + margin2).toFixed(0)}`;
+                                        }
+
+                                        if (quote.barge_fee) {
+                                          customerPrice += `+${quote.barge_fee.toFixed(0)}`;
+                                        }
+
+                                        return customerPrice;
+                                      } catch {
+                                        return null;
+                                      }
+                                    };
+
+                                    const customerPrice = getCustomerPrice();
+
                                     return (
                                       <td key={i} className="px-2 py-1.5 text-center">
                                         {quote ? (
-                                          <span className="text-gray-700">
-                                            {formatPrice(quote)}
-                                          </span>
+                                          <div className="flex flex-col gap-0.5">
+                                            <span className="text-green-700 text-[10px]">
+                                              {formatPrice(quote)}
+                                            </span>
+                                            {customerPrice && (
+                                              <span className="text-blue-600 text-[9px]">
+                                                → {customerPrice}
+                                              </span>
+                                            )}
+                                          </div>
                                         ) : (
                                           <span className="text-gray-300">—</span>
                                         )}
@@ -2413,6 +2605,175 @@ const AIAssistantColumn = memo(() => {
                         </table>
                       );
                     })()}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Buyer Info 탭 내용 */}
+            {activeTab === 'buyer-info' && (
+              <div className="space-y-3 border rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-600">
+                    {session?.customer_room_name || 'Buyer'} - Vessels & Inquiry History
+                  </span>
+                </div>
+
+                {buyerVesselsLoading ? (
+                  <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
+                    Loading vessels...
+                  </div>
+                ) : buyerVessels.length === 0 ? (
+                  <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
+                    No vessel data found
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* 배 목록 (가로 스크롤 가능한 버튼들) */}
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {buyerVessels.map((vessel) => (
+                        <button
+                          key={vessel.vessel_name}
+                          onClick={() => setSelectedBuyerVessel(vessel.vessel_name)}
+                          className={cn(
+                            "flex-shrink-0 px-3 py-2 rounded-lg border text-xs transition-colors",
+                            selectedBuyerVessel === vessel.vessel_name
+                              ? "bg-orange-100 border-orange-400 text-orange-800"
+                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Ship className="w-3.5 h-3.5" />
+                            <div className="text-left">
+                              <div className="font-medium">{vessel.vessel_name}</div>
+                              <div className="text-[10px] text-gray-500">
+                                {vessel.imo ? `IMO: ${vessel.imo} · ` : ''}{vessel.inquiry_count} inquiries
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* 선택된 배의 인쿼리 히스토리 테이블 */}
+                    {selectedBuyerVessel && (
+                      <div className="overflow-x-auto">
+                        {inquiryHistoryLoading ? (
+                          <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
+                            Loading history...
+                          </div>
+                        ) : inquiryHistory.length === 0 ? (
+                          <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
+                            No inquiry history
+                          </div>
+                        ) : (
+                          <table className="w-full text-[10px]">
+                            <thead>
+                              <tr className="bg-orange-50 border-b">
+                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[80px]">Date</th>
+                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[70px]">Port</th>
+                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[70px]">ETA</th>
+                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[100px]">Fuel1</th>
+                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[100px]">Fuel2</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-green-700 bg-green-50 min-w-[80px]">Offer</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-blue-700 bg-blue-50 min-w-[80px]">Customer</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-purple-700 bg-purple-50 min-w-[80px]">Deal Done</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-gray-600 min-w-[80px]">Margin/MT</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-gray-600 min-w-[60px]">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {inquiryHistory.map((inquiry, idx) => {
+                                const isCurrentSession = inquiry.session_id === session?.session_id;
+                                const bestOffer = inquiry.offers[0];
+                                const bestPurchase = inquiry.purchase_prices[0];
+                                const bestMargin = inquiry.margin_per_ton[0];
+
+                                return (
+                                  <tr
+                                    key={inquiry.session_id}
+                                    className={cn(
+                                      "border-b hover:bg-gray-50",
+                                      isCurrentSession && "bg-orange-50/50"
+                                    )}
+                                  >
+                                    <td className="px-2 py-1.5 text-gray-700">
+                                      {inquiry.inquiry_date
+                                        ? new Date(inquiry.inquiry_date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })
+                                        : '—'}
+                                      {isCurrentSession && <span className="ml-1 text-orange-600">●</span>}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-gray-700">{inquiry.port || '—'}</td>
+                                    <td className="px-2 py-1.5 text-gray-700">{inquiry.eta || '—'}</td>
+                                    <td className="px-2 py-1.5">
+                                      <div className="text-gray-700">{inquiry.fuel1 || '—'}</div>
+                                      {inquiry.fuel1_qty && <div className="text-gray-400">{inquiry.fuel1_qty}</div>}
+                                    </td>
+                                    <td className="px-2 py-1.5">
+                                      {inquiry.fuel2 ? (
+                                        <>
+                                          <div className="text-gray-700">{inquiry.fuel2}</div>
+                                          {inquiry.fuel2_qty && <div className="text-gray-400">{inquiry.fuel2_qty}</div>}
+                                        </>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center bg-green-50/50">
+                                      {bestOffer ? (
+                                        <span className="font-medium text-green-700">{bestOffer.price}</span>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center bg-blue-50/50">
+                                      {bestPurchase ? (
+                                        <span className="font-medium text-blue-700">{bestPurchase.price}</span>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center bg-purple-50/50">
+                                      {inquiry.deal_done_price ? (
+                                        <span className="font-bold text-purple-700">{inquiry.deal_done_price}</span>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center">
+                                      {bestMargin ? (
+                                        <div className="text-gray-700">
+                                          {bestMargin.fuel1_margin && <div>{bestMargin.fuel1_margin}</div>}
+                                          {bestMargin.fuel2_margin && <div>{bestMargin.fuel2_margin}</div>}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1.5 text-center">
+                                      <span className={cn(
+                                        "px-1.5 py-0.5 rounded text-[9px]",
+                                        inquiry.status === 'closed_success' ? "bg-green-100 text-green-700" :
+                                        inquiry.status === 'closed_lost' ? "bg-red-100 text-red-700" :
+                                        inquiry.status === 'closed_failed' ? "bg-red-100 text-red-700" :
+                                        inquiry.status === 'active' ? "bg-blue-100 text-blue-700" :
+                                        "bg-gray-100 text-gray-600"
+                                      )}>
+                                        {inquiry.status === 'closed_success' ? 'Won' :
+                                         inquiry.status === 'closed_lost' ? 'Lost' :
+                                         inquiry.status === 'closed_failed' ? 'Failed' :
+                                         inquiry.status === 'active' ? 'Active' :
+                                         inquiry.status || '—'}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3015,17 +3376,39 @@ const SellerChatRoom = memo(({
   sellerContext?: SellerContext;
 }) => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLengthRef = useRef<number>(0);
 
-  // Auto scroll to bottom on tab change or new messages
+  // Auto scroll to bottom on tab change or new messages loaded
   useEffect(() => {
     const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
 
-    if (viewport) {
-      requestAnimationFrame(() => {
-        viewport.scrollTop = viewport.scrollHeight;
-      });
+    if (viewport && messages.length > 0) {
+      // 메시지가 로드되었을 때 (0 -> N) 또는 새 메시지가 추가되었을 때
+      const isInitialLoad = prevMessagesLengthRef.current === 0 && messages.length > 0;
+      const isNewMessage = messages.length > prevMessagesLengthRef.current;
+
+      if (isInitialLoad || isNewMessage) {
+        // setTimeout으로 DOM 렌더링 완료 후 스크롤
+        setTimeout(() => {
+          viewport.scrollTop = viewport.scrollHeight;
+        }, 50);
+      }
+
+      prevMessagesLengthRef.current = messages.length;
     }
-  }, [trader, messages]);
+  }, [messages]);
+
+  // 탭 전환 시 ref 리셋 및 즉시 스크롤
+  useEffect(() => {
+    prevMessagesLengthRef.current = 0;
+
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+    if (viewport && messages.length > 0) {
+      setTimeout(() => {
+        viewport.scrollTop = viewport.scrollHeight;
+      }, 100);
+    }
+  }, [trader]);
 
   return (
     <div className="flex flex-col h-full">
