@@ -276,18 +276,24 @@ const BuyerChatColumn = memo(() => {
 
   // Auto scroll to bottom on messages loaded
   useEffect(() => {
-    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
-
-    if (viewport && buyerMessages.length > 0) {
+    if (buyerMessages.length > 0) {
       // 메시지가 로드되었을 때 (0 -> N) 또는 새 메시지가 추가되었을 때
       const isInitialLoad = prevMessagesLengthRef.current === 0 && buyerMessages.length > 0;
       const isNewMessage = buyerMessages.length > prevMessagesLengthRef.current;
 
       if (isInitialLoad || isNewMessage) {
-        // setTimeout으로 DOM 렌더링 완료 후 스크롤
-        setTimeout(() => {
-          viewport.scrollTop = viewport.scrollHeight;
-        }, 50);
+        // 여러 번 스크롤 시도 (렌더링 타이밍 문제 해결)
+        const scrollToBottom = () => {
+          const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+          if (viewport) {
+            viewport.scrollTop = viewport.scrollHeight;
+          }
+        };
+
+        // 즉시 + 지연 스크롤 (여러 타이밍에 시도)
+        scrollToBottom();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 150);
       }
 
       prevMessagesLengthRef.current = buyerMessages.length;
@@ -671,6 +677,182 @@ const BuyerRequiredFullContext = memo(({ session }: { session: TradingSession | 
   );
 });
 BuyerRequiredFullContext.displayName = 'BuyerRequiredFullContext';
+
+// Buyer Vessel History 컴포넌트 (각 배별 인쿼리 히스토리)
+const BuyerVesselHistory = memo(({ customerRoom, vesselName, currentSessionId }: {
+  customerRoom: string;
+  vesselName: string;
+  currentSessionId?: string;
+}) => {
+  const [history, setHistory] = useState<Array<{
+    session_id: string;
+    inquiry_date: string | null;
+    port: string | null;
+    eta: string | null;
+    fuel1: string | null;
+    fuel1_qty: string | null;
+    fuel2: string | null;
+    fuel2_qty: string | null;
+    status: string | null;
+    offers: Array<{ trader: string; price: string }>;
+    purchase_prices: Array<{ trader: string; price: string }>;
+    deal_done_price: string | null;
+    margin_per_ton: Array<{ trader: string; fuel1_margin?: string; fuel2_margin?: string }>;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!customerRoom || !vesselName) return;
+
+      setLoading(true);
+      try {
+        const response = await fetch(
+          `${getApiUrl()}/customers/${encodeURIComponent(customerRoom)}/vessels/${encodeURIComponent(vesselName)}/history`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setHistory(data.history || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch vessel history:', error);
+        setHistory([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [customerRoom, vesselName]);
+
+  if (loading) {
+    return (
+      <div className="px-3 py-4 text-center text-gray-400 text-xs">
+        Loading...
+      </div>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <div className="px-3 py-4 text-center text-gray-400 text-xs">
+        No inquiry history
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className="bg-gray-50 border-b">
+            <th className="px-2 py-1.5 text-left font-medium text-gray-600 min-w-[70px]">Date</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-600 min-w-[60px]">Port</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-600 min-w-[70px]">ETA</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-600 min-w-[90px]">Fuel1</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-600 min-w-[90px]">Fuel2</th>
+            <th className="px-2 py-1.5 text-center font-medium text-green-700 bg-green-50 min-w-[70px]">Offer</th>
+            <th className="px-2 py-1.5 text-center font-medium text-blue-700 bg-blue-50 min-w-[70px]">Customer</th>
+            <th className="px-2 py-1.5 text-center font-medium text-purple-700 bg-purple-50 min-w-[70px]">Deal Done</th>
+            <th className="px-2 py-1.5 text-center font-medium text-gray-600 min-w-[70px]">Margin</th>
+            <th className="px-2 py-1.5 text-center font-medium text-gray-600 min-w-[55px]">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {history.map((inquiry) => {
+            const isCurrentSession = inquiry.session_id === currentSessionId;
+            const bestOffer = inquiry.offers[0];
+            const bestPurchase = inquiry.purchase_prices[0];
+            const bestMargin = inquiry.margin_per_ton[0];
+
+            return (
+              <tr
+                key={inquiry.session_id}
+                className={cn(
+                  "border-b hover:bg-gray-50",
+                  isCurrentSession && "bg-orange-50"
+                )}
+              >
+                <td className="px-2 py-1.5 text-gray-700">
+                  {inquiry.inquiry_date
+                    ? new Date(inquiry.inquiry_date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })
+                    : '—'}
+                  {isCurrentSession && <span className="ml-1 text-orange-500">●</span>}
+                </td>
+                <td className="px-2 py-1.5 text-gray-700">{inquiry.port || '—'}</td>
+                <td className="px-2 py-1.5 text-gray-700">{inquiry.eta || '—'}</td>
+                <td className="px-2 py-1.5">
+                  <div className="text-gray-700">{inquiry.fuel1 || '—'}</div>
+                  {inquiry.fuel1_qty && <div className="text-[9px] text-gray-400">{inquiry.fuel1_qty}</div>}
+                </td>
+                <td className="px-2 py-1.5">
+                  {inquiry.fuel2 ? (
+                    <>
+                      <div className="text-gray-700">{inquiry.fuel2}</div>
+                      {inquiry.fuel2_qty && <div className="text-[9px] text-gray-400">{inquiry.fuel2_qty}</div>}
+                    </>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-center bg-green-50/50">
+                  {bestOffer ? (
+                    <span className="font-medium text-green-700">{bestOffer.price}</span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-center bg-blue-50/50">
+                  {bestPurchase ? (
+                    <span className="font-medium text-blue-700">{bestPurchase.price}</span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-center bg-purple-50/50">
+                  {inquiry.deal_done_price ? (
+                    <span className="font-bold text-purple-700">{inquiry.deal_done_price}</span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  {bestMargin ? (
+                    <div className="text-gray-700 text-[9px]">
+                      {bestMargin.fuel1_margin && <div>{bestMargin.fuel1_margin}</div>}
+                      {bestMargin.fuel2_margin && <div>{bestMargin.fuel2_margin}</div>}
+                    </div>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded text-[9px]",
+                    inquiry.status === 'closed_success' ? "bg-green-100 text-green-700" :
+                    inquiry.status === 'closed_lost' ? "bg-red-100 text-red-700" :
+                    inquiry.status === 'closed_failed' ? "bg-red-100 text-red-700" :
+                    inquiry.status === 'active' ? "bg-blue-100 text-blue-700" :
+                    inquiry.status === 'no_offer' ? "bg-gray-100 text-gray-600" :
+                    "bg-gray-100 text-gray-600"
+                  )}>
+                    {inquiry.status === 'closed_success' ? 'Won' :
+                     inquiry.status === 'closed_lost' ? 'Lost' :
+                     inquiry.status === 'closed_failed' ? 'Failed' :
+                     inquiry.status === 'active' ? 'Active' :
+                     inquiry.status === 'no_offer' ? 'N/O' :
+                     inquiry.status || '—'}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+});
+BuyerVesselHistory.displayName = 'BuyerVesselHistory';
 
 // Seller Quote Comparison Table (Excel-style)
 const SellerQuoteComparisonTable = memo(() => {
@@ -2610,12 +2792,15 @@ const AIAssistantColumn = memo(() => {
               </div>
             )}
 
-            {/* Buyer Info 탭 내용 */}
+            {/* Buyer Info 탭 내용 - 배별 세로 리스트 */}
             {activeTab === 'buyer-info' && (
-              <div className="space-y-3 border rounded-lg p-3">
+              <div className="space-y-4 border rounded-lg p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-600">
                     {session?.customer_room_name || 'Buyer'} - Vessels & Inquiry History
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    {buyerVessels.length} vessels
                   </span>
                 </div>
 
@@ -2628,152 +2813,58 @@ const AIAssistantColumn = memo(() => {
                     No vessel data found
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {/* 배 목록 (가로 스크롤 가능한 버튼들) */}
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                      {buyerVessels.map((vessel) => (
-                        <button
+                  <div className="space-y-4">
+                    {/* 각 배별로 세로 리스트 */}
+                    {buyerVessels.map((vessel) => {
+                      const isCurrentVessel = vessel.vessel_name === session?.vessel_name;
+
+                      return (
+                        <div
                           key={vessel.vessel_name}
-                          onClick={() => setSelectedBuyerVessel(vessel.vessel_name)}
                           className={cn(
-                            "flex-shrink-0 px-3 py-2 rounded-lg border text-xs transition-colors",
-                            selectedBuyerVessel === vessel.vessel_name
-                              ? "bg-orange-100 border-orange-400 text-orange-800"
-                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                            "border rounded-lg overflow-hidden",
+                            isCurrentVessel && "ring-2 ring-orange-400"
                           )}
                         >
-                          <div className="flex items-center gap-2">
-                            <Ship className="w-3.5 h-3.5" />
-                            <div className="text-left">
-                              <div className="font-medium">{vessel.vessel_name}</div>
-                              <div className="text-[10px] text-gray-500">
-                                {vessel.imo ? `IMO: ${vessel.imo} · ` : ''}{vessel.inquiry_count} inquiries
+                          {/* 배 헤더 */}
+                          <div className={cn(
+                            "px-3 py-2 flex items-center justify-between",
+                            isCurrentVessel ? "bg-orange-100" : "bg-gray-50"
+                          )}>
+                            <div className="flex items-center gap-2">
+                              <Ship className={cn(
+                                "w-4 h-4",
+                                isCurrentVessel ? "text-orange-600" : "text-gray-500"
+                              )} />
+                              <div>
+                                <span className={cn(
+                                  "font-medium text-sm",
+                                  isCurrentVessel ? "text-orange-800" : "text-gray-700"
+                                )}>
+                                  {vessel.vessel_name}
+                                </span>
+                                {isCurrentVessel && (
+                                  <span className="ml-2 text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded">
+                                    Current
+                                  </span>
+                                )}
                               </div>
                             </div>
+                            <div className="text-[10px] text-gray-500">
+                              {vessel.imo && <span className="mr-2">IMO: {vessel.imo}</span>}
+                              <span>{vessel.inquiry_count} inquiries</span>
+                            </div>
                           </div>
-                        </button>
-                      ))}
-                    </div>
 
-                    {/* 선택된 배의 인쿼리 히스토리 테이블 */}
-                    {selectedBuyerVessel && (
-                      <div className="overflow-x-auto">
-                        {inquiryHistoryLoading ? (
-                          <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
-                            Loading history...
-                          </div>
-                        ) : inquiryHistory.length === 0 ? (
-                          <div className="h-32 flex items-center justify-center text-gray-500 text-sm">
-                            No inquiry history
-                          </div>
-                        ) : (
-                          <table className="w-full text-[10px]">
-                            <thead>
-                              <tr className="bg-orange-50 border-b">
-                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[80px]">Date</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[70px]">Port</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[70px]">ETA</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[100px]">Fuel1</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-orange-700 min-w-[100px]">Fuel2</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-green-700 bg-green-50 min-w-[80px]">Offer</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-blue-700 bg-blue-50 min-w-[80px]">Customer</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-purple-700 bg-purple-50 min-w-[80px]">Deal Done</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-600 min-w-[80px]">Margin/MT</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-600 min-w-[60px]">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {inquiryHistory.map((inquiry, idx) => {
-                                const isCurrentSession = inquiry.session_id === session?.session_id;
-                                const bestOffer = inquiry.offers[0];
-                                const bestPurchase = inquiry.purchase_prices[0];
-                                const bestMargin = inquiry.margin_per_ton[0];
-
-                                return (
-                                  <tr
-                                    key={inquiry.session_id}
-                                    className={cn(
-                                      "border-b hover:bg-gray-50",
-                                      isCurrentSession && "bg-orange-50/50"
-                                    )}
-                                  >
-                                    <td className="px-2 py-1.5 text-gray-700">
-                                      {inquiry.inquiry_date
-                                        ? new Date(inquiry.inquiry_date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })
-                                        : '—'}
-                                      {isCurrentSession && <span className="ml-1 text-orange-600">●</span>}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-gray-700">{inquiry.port || '—'}</td>
-                                    <td className="px-2 py-1.5 text-gray-700">{inquiry.eta || '—'}</td>
-                                    <td className="px-2 py-1.5">
-                                      <div className="text-gray-700">{inquiry.fuel1 || '—'}</div>
-                                      {inquiry.fuel1_qty && <div className="text-gray-400">{inquiry.fuel1_qty}</div>}
-                                    </td>
-                                    <td className="px-2 py-1.5">
-                                      {inquiry.fuel2 ? (
-                                        <>
-                                          <div className="text-gray-700">{inquiry.fuel2}</div>
-                                          {inquiry.fuel2_qty && <div className="text-gray-400">{inquiry.fuel2_qty}</div>}
-                                        </>
-                                      ) : (
-                                        <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-center bg-green-50/50">
-                                      {bestOffer ? (
-                                        <span className="font-medium text-green-700">{bestOffer.price}</span>
-                                      ) : (
-                                        <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-center bg-blue-50/50">
-                                      {bestPurchase ? (
-                                        <span className="font-medium text-blue-700">{bestPurchase.price}</span>
-                                      ) : (
-                                        <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-center bg-purple-50/50">
-                                      {inquiry.deal_done_price ? (
-                                        <span className="font-bold text-purple-700">{inquiry.deal_done_price}</span>
-                                      ) : (
-                                        <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-center">
-                                      {bestMargin ? (
-                                        <div className="text-gray-700">
-                                          {bestMargin.fuel1_margin && <div>{bestMargin.fuel1_margin}</div>}
-                                          {bestMargin.fuel2_margin && <div>{bestMargin.fuel2_margin}</div>}
-                                        </div>
-                                      ) : (
-                                        <span className="text-gray-300">—</span>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-center">
-                                      <span className={cn(
-                                        "px-1.5 py-0.5 rounded text-[9px]",
-                                        inquiry.status === 'closed_success' ? "bg-green-100 text-green-700" :
-                                        inquiry.status === 'closed_lost' ? "bg-red-100 text-red-700" :
-                                        inquiry.status === 'closed_failed' ? "bg-red-100 text-red-700" :
-                                        inquiry.status === 'active' ? "bg-blue-100 text-blue-700" :
-                                        "bg-gray-100 text-gray-600"
-                                      )}>
-                                        {inquiry.status === 'closed_success' ? 'Won' :
-                                         inquiry.status === 'closed_lost' ? 'Lost' :
-                                         inquiry.status === 'closed_failed' ? 'Failed' :
-                                         inquiry.status === 'active' ? 'Active' :
-                                         inquiry.status || '—'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                    )}
+                          {/* 인쿼리 히스토리 테이블 */}
+                          <BuyerVesselHistory
+                            customerRoom={session?.customer_room_name || ''}
+                            vesselName={vessel.vessel_name}
+                            currentSessionId={session?.session_id}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3378,35 +3469,41 @@ const SellerChatRoom = memo(({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef<number>(0);
 
-  // Auto scroll to bottom on tab change or new messages loaded
-  useEffect(() => {
+  // 스크롤 함수
+  const scrollToBottom = () => {
     const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+  };
 
-    if (viewport && messages.length > 0) {
+  // Auto scroll to bottom on new messages loaded
+  useEffect(() => {
+    if (messages.length > 0) {
       // 메시지가 로드되었을 때 (0 -> N) 또는 새 메시지가 추가되었을 때
       const isInitialLoad = prevMessagesLengthRef.current === 0 && messages.length > 0;
       const isNewMessage = messages.length > prevMessagesLengthRef.current;
 
       if (isInitialLoad || isNewMessage) {
-        // setTimeout으로 DOM 렌더링 완료 후 스크롤
-        setTimeout(() => {
-          viewport.scrollTop = viewport.scrollHeight;
-        }, 50);
+        // 여러 번 스크롤 시도 (렌더링 타이밍 문제 해결)
+        scrollToBottom();
+        setTimeout(scrollToBottom, 50);
+        setTimeout(scrollToBottom, 150);
       }
 
       prevMessagesLengthRef.current = messages.length;
     }
   }, [messages]);
 
-  // 탭 전환 시 ref 리셋 및 즉시 스크롤
+  // 탭 전환 시 ref 리셋 및 스크롤
   useEffect(() => {
     prevMessagesLengthRef.current = 0;
 
-    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
-    if (viewport && messages.length > 0) {
-      setTimeout(() => {
-        viewport.scrollTop = viewport.scrollHeight;
-      }, 100);
+    if (messages.length > 0) {
+      // 여러 번 스크롤 시도
+      scrollToBottom();
+      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 150);
     }
   }, [trader]);
 
