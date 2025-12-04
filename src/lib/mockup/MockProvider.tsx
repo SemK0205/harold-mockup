@@ -351,7 +351,8 @@ export function MockProvider({ children }: MockProviderProps) {
           const targetRooms = Object.values(selected_targets || {}).flat() as string[];
 
           // Suggestion에서 session_id 찾기
-          const suggestion = suggestions.find(s => s.id === suggestion_id);
+          const allSuggestions = Object.values(aiSuggestions).flat();
+          const suggestion = allSuggestions.find(s => s.id === suggestion_id);
           const sessionId = suggestion?.session_id;
 
           // 즉시 성공 응답
