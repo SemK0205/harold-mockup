@@ -45,6 +45,7 @@ import { useSSEManager } from "@/hooks/useSSEManager";
 import SSEConnectionManager from "@/lib/sse/SSEConnectionManager";
 import { useDealStore } from "@/stores";
 import { getApiUrl } from "@/lib/api/client";
+import { QuickReplyButtons } from "@/components/chat/QuickReplyButtons";
 
 interface DealDetailModalProps {
   session: TradingSession | null;
@@ -356,7 +357,27 @@ const BuyerChatColumn = memo(() => {
         </div>
       </ScrollArea>
 
-      <div className="p-3 border-t bg-white">
+      <div className="p-3 border-t bg-white space-y-2">
+        {/* Quick Reply Buttons */}
+        {session?.customer_room_name && (
+          <QuickReplyButtons
+            roomName={session.customer_room_name}
+            onSend={(text) => {
+              // 메시지 목록에 즉시 추가 (옵티미스틱 업데이트)
+              addBuyerMessage({
+                message_id: Date.now(),
+                room_name: session.customer_room_name,
+                sender: "나",
+                message: text,
+                package_name: "com.kakao.talk",
+                direction: "outgoing",
+                timestamp: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+              });
+            }}
+            className="pb-1"
+          />
+        )}
         <div className="flex gap-2">
           <Input
             value={inputValue}
@@ -2722,9 +2743,9 @@ const SellerChatsColumn = memo(() => {
           No connected sellers
         </div>
       ) : (
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0">
           {/* 상단 탭 영역 (30%) */}
-          <div className="h-[30%] flex-shrink-0 border-b bg-gray-50 overflow-y-auto">
+          <div className="flex-shrink-0 border-b bg-gray-50 overflow-y-auto" style={{ height: '30%' }}>
             <div className="grid grid-cols-2 gap-1 p-2">
               {sellerTabs.map((trader) => {
                 const status = getSellerStatus(trader);
@@ -2849,7 +2870,7 @@ const SellerChatsColumn = memo(() => {
           </div>
 
           {/* 하단 채팅 영역 (70%) */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ height: '70%' }}>
             {activeSellerTab && (
               <SellerChatRoom
                 key={`${activeSellerTab}-${getSellerContext(activeSellerTab)?.status || 'unknown'}`}
@@ -2993,20 +3014,18 @@ const SellerChatRoom = memo(({
   onSend: () => void;
   sellerContext?: SellerContext;
 }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const isFirstLoadRef = useRef(true);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom - instant on first load, smooth on updates
+  // Auto scroll to bottom on tab change or new messages
   useEffect(() => {
-    if (messages.length > 0) {
-      if (isFirstLoadRef.current) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-        isFirstLoadRef.current = false;
-      } else {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+    const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+
+    if (viewport) {
+      requestAnimationFrame(() => {
+        viewport.scrollTop = viewport.scrollHeight;
+      });
     }
-  }, [messages]);
+  }, [trader, messages]);
 
   return (
     <div className="flex flex-col h-full">
@@ -3124,16 +3143,20 @@ const SellerChatRoom = memo(({
         </div>
       )}
 
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
         <div className="p-4 space-y-3">
           {messages.map((msg) => (
             <MessageBubble key={msg.message_id} message={msg} />
           ))}
-          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      <div className="p-3 border-t bg-white flex-shrink-0">
+      <div className="p-3 border-t bg-white flex-shrink-0 space-y-2">
+        {/* Quick Reply Buttons for Seller */}
+        <QuickReplyButtons
+          roomName={trader}
+          className="pb-1"
+        />
         <div className="flex gap-2">
           <Input
             value={inputValue}
