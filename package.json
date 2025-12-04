@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 49234",
     "lint": "eslint",
-    "deploy": "next build && gh-pages -d out"
+    "deploy": "next build && touch out/.nojekyll && gh-pages -d out -t true"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
