@@ -551,7 +551,7 @@ export function MockProvider({ children }: MockProviderProps) {
           // 3-7초 후 판매자가 답변하고 seller_contexts 업데이트 (시뮬레이션)
           setTimeout(() => {
             // 질문 내용 분석
-            const msgLower = message.toLowerCase();
+            const msgLower = msgText.toLowerCase();
             let replyText = "Received. Let me check and get back to you shortly.";
             let updateField: string | null = null;
             let updateValue: string | null = null;
