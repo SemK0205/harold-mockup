@@ -481,9 +481,9 @@ export function MockProvider({ children }: MockProviderProps) {
       if (url.includes('/api/outgoing/send') && init?.method === 'POST') {
         try {
           const body = JSON.parse(init.body as string);
-          const { room_name, message: msgText, package_name, session_id } = body;
+          const { room_name, message: msgText, package_name, session_id, source } = body;
 
-          console.log('[MockProvider] Outgoing send:', { room_name, session_id, msgText });
+          console.log('[MockProvider] Outgoing send:', { room_name, session_id, source, msgText });
 
           // Deal의 seller_contexts 업데이트 (Seller Matrix에 추가)
           if (session_id) {
@@ -550,6 +550,12 @@ export function MockProvider({ children }: MockProviderProps) {
 
           // 3-7초 후 판매자가 답변하고 seller_contexts 업데이트 (시뮬레이션)
           setTimeout(() => {
+            // Inquiry Sender로 보낸 메시지는 auto-reply 생성하지 않음
+            if (source === 'inquiry_sender') {
+              console.log('[MockProvider] Skipping auto-reply for inquiry_sender message');
+              return;
+            }
+
             // 질문 내용 분석
             const msgLower = msgText.toLowerCase();
             let replyText = "Received. Let me check and get back to you shortly.";

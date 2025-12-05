@@ -2445,7 +2445,8 @@ const AIAssistantColumn = memo(() => {
                                       room_name: roomName,
                                       message: editingMessage,
                                       package_name: trader.platform || 'com.kakao.talk',
-                                      session_id: session?.session_id
+                                      session_id: session?.session_id,
+                                      source: 'inquiry_sender', // Inquiry Sender로 보낸 메시지는 auto-reply 생성 안함
                                     })
                                   });
                                 }
