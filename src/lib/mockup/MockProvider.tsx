@@ -120,6 +120,8 @@ export function MockProvider({ children }: MockProviderProps) {
     const mockFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
+      console.log('[MockProvider] Fetch intercepted:', url, 'method:', init?.method);
+
       // /chats/rooms API - 채팅방 목록
       if (url.includes('/chats/rooms')) {
         const rooms = chatRooms.map(room => ({
