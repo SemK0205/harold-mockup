@@ -1182,6 +1182,13 @@ const SellerQuoteComparisonTable = memo(() => {
     const question = getFieldQuestion(fieldKey);
     if (!question) return;
 
+    console.log('[SellerMatrix] Cell clicked:', {
+      trader,
+      fieldKey,
+      question,
+      sessionId: session?.session_id,
+    });
+
     const platform = getRoomPlatform(trader);
     const platformToInternal: Record<string, string> = {
       'com.kakao.talk': 'kakao',
