@@ -607,6 +607,8 @@ export function MockProvider({ children }: MockProviderProps) {
               created_at: new Date().toISOString(),
             };
 
+            console.log('[MockProvider] Auto-reply generated:', { room_name, replyText, updateField, updateValue, session_id });
+
             setMessages(prev => {
               const existing = prev[room_name] || [];
               return {
@@ -627,16 +629,22 @@ export function MockProvider({ children }: MockProviderProps) {
               setDeals(prev => prev.map(deal => {
                 // 특정 session만 업데이트
                 if (deal.session_id === session_id && deal.seller_contexts && deal.seller_contexts[room_name]) {
+                  const existingContext = deal.seller_contexts[room_name];
+                  const existingQuote = existingContext.quote || {};
+
                   const updatedContext = {
-                    ...deal.seller_contexts[room_name],
+                    ...existingContext,
                     quote: {
-                      ...deal.seller_contexts[room_name].quote,
+                      ...existingQuote,
                       [updateField]: updateValue,
                     },
                   };
+
+                  // earliest는 context 바로 아래에도 저장
                   if (updateField === 'earliest') {
                     updatedContext.earliest = updateValue;
                   }
+
                   const newSellerContexts = {
                     ...deal.seller_contexts,
                     [room_name]: updatedContext,
@@ -644,7 +652,7 @@ export function MockProvider({ children }: MockProviderProps) {
 
                   // Deal Store도 업데이트
                   setSellerContexts(deal.session_id, newSellerContexts);
-                  console.log('[MockProvider] Updated seller_contexts for session:', session_id, 'trader:', room_name, 'field:', updateField);
+                  console.log('[MockProvider] Updated seller_contexts for session:', session_id, 'trader:', room_name, 'field:', updateField, 'value:', updateValue);
 
                   return {
                     ...deal,
