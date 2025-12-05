@@ -7,6 +7,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import type { ChatMessage, TradingSession, AISuggestion } from '@/types';
 import useDealStore from '@/stores/useDealStore';
+import { useMockContext } from '@/lib/mockup/MockProvider';
 
 interface ModalColumn {
   width: number;
@@ -71,6 +72,9 @@ interface DealModalProviderProps {
 }
 
 export function DealModalProvider({ children, session: initialSession }: DealModalProviderProps) {
+  // Get MockProvider functions at the top
+  const { getMessagesForRoom } = useMockContext();
+
   // Session
   const [session, setSession] = useState<TradingSession | null>(initialSession);
 
@@ -131,6 +135,13 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
       if (newTraders.length === 0) return prev;
 
       console.log('[DealModalContext] Adding new seller tabs from seller_contexts:', newTraders);
+
+      // Load messages for new traders from MockProvider
+      newTraders.forEach(trader => {
+        const existingMessages = getMessagesForRoom(trader);
+        setSellerMessages(prevMessages => new Map(prevMessages).set(trader, existingMessages));
+      });
+
       return [...prev, ...newTraders];
     });
 
@@ -139,7 +150,7 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
       if (prev) return prev;
       return tradersFromContexts[0] || null;
     });
-  }, [session?.session_id, storeSellerContexts, session?.seller_contexts]);
+  }, [session?.session_id, storeSellerContexts, session?.seller_contexts, getMessagesForRoom]);
 
   // UI State
   const [isResizing, setIsResizing] = useState(false);
@@ -223,16 +234,15 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
       return [...prev, trader];
     });
 
-    // Initialize messages for new tab
-    if (!sellerMessages.has(trader)) {
-      setSellerMessages(prev => new Map(prev).set(trader, []));
-    }
+    // Load messages from MockProvider instead of empty array
+    const existingMessages = getMessagesForRoom(trader);
+    setSellerMessages(prev => new Map(prev).set(trader, existingMessages));
 
     // Set as active if first tab
     if (!activeSellerTab) {
       setActiveSellerTab(trader);
     }
-  }, [activeSellerTab, sellerMessages]);
+  }, [activeSellerTab, getMessagesForRoom]);
 
   // Remove seller tab
   const removeSellerTab = useCallback((trader: string) => {
