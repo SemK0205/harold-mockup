@@ -487,8 +487,6 @@ export function MockProvider({ children }: MockProviderProps) {
 
           // Deal의 seller_contexts 업데이트 (Seller Matrix에 추가)
           if (session_id) {
-            let updatedSellerContexts: Record<string, any> | null = null;
-
             setDeals(prev => {
               const updated = prev.map(deal => {
                 if (deal.session_id === session_id) {
@@ -509,20 +507,18 @@ export function MockProvider({ children }: MockProviderProps) {
                     requested_traders: [...new Set([...(deal.requested_traders || []), room_name])],
                     stage: 'deal_started' as const,
                   };
-                  updatedSellerContexts = newSellerContexts;
+
+                  // Update Deal Store (Zustand) immediately - Seller Quote Matrix에서 읽음
+                  setSellerContexts(session_id, newSellerContexts);
                   console.log('[MockProvider] Updated deal:', updatedDeal.session_id, 'new seller_contexts keys:', Object.keys(updatedDeal.seller_contexts));
+                  console.log('[MockProvider] Updated Deal Store seller_contexts for session:', session_id);
+
                   return updatedDeal;
                 }
                 return deal;
               });
               return updated;
             });
-
-            // Update Deal Store (Zustand) - Seller Quote Matrix에서 읽음
-            if (updatedSellerContexts) {
-              setSellerContexts(session_id, updatedSellerContexts);
-              console.log('[MockProvider] Updated Deal Store seller_contexts for session:', session_id);
-            }
           }
 
           // 메시지 추가
