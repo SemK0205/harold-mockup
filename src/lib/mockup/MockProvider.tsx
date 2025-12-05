@@ -23,6 +23,7 @@ import {
   generateNewInquiryDeal,
   generateNewMessage,
 } from "./mockData";
+import useDealStore from "@/stores/useDealStore";
 
 // ============================================
 // Context Types
@@ -87,6 +88,9 @@ interface MockProviderProps {
 }
 
 export function MockProvider({ children }: MockProviderProps) {
+  // Deal Store (Zustand)
+  const setSellerContexts = useDealStore((state) => state.setSellerContexts);
+
   // State
   const [deals, setDeals] = useState<DealScoreboard[]>(
     // 최신 순으로 정렬 (created_at 내림차순)
@@ -483,6 +487,8 @@ export function MockProvider({ children }: MockProviderProps) {
 
           // Deal의 seller_contexts 업데이트 (Seller Matrix에 추가)
           if (session_id) {
+            let updatedSellerContexts: Record<string, any> | null = null;
+
             setDeals(prev => {
               const updated = prev.map(deal => {
                 if (deal.session_id === session_id) {
@@ -503,6 +509,7 @@ export function MockProvider({ children }: MockProviderProps) {
                     requested_traders: [...new Set([...(deal.requested_traders || []), room_name])],
                     stage: 'deal_started' as const,
                   };
+                  updatedSellerContexts = newSellerContexts;
                   console.log('[MockProvider] Updated deal:', updatedDeal.session_id, 'new seller_contexts keys:', Object.keys(updatedDeal.seller_contexts));
                   return updatedDeal;
                 }
@@ -510,6 +517,12 @@ export function MockProvider({ children }: MockProviderProps) {
               });
               return updated;
             });
+
+            // Update Deal Store (Zustand) - Seller Quote Matrix에서 읽음
+            if (updatedSellerContexts) {
+              setSellerContexts(session_id, updatedSellerContexts);
+              console.log('[MockProvider] Updated Deal Store seller_contexts for session:', session_id);
+            }
           }
 
           // 메시지 추가
