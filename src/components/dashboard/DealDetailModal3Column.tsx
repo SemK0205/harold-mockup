@@ -3383,7 +3383,7 @@ const MessageBubble = memo(({ message }: { message: ChatMessage }) => {
       </div>
       {isOutgoing && (
         <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
-          <img src="/SP_logo.png" alt="Seanergy" className="w-8 h-8 object-cover" />
+          <img src="/harold-mockup/SP_logo.png" alt="Seanergy" className="w-8 h-8 object-cover" />
         </div>
       )}
     </div>

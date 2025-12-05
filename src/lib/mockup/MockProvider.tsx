@@ -781,7 +781,7 @@ export function MockProvider({ children }: MockProviderProps) {
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification(title, {
         body,
-        icon: "/SP_logo.png",
+        icon: "/harold-mockup/SP_logo.png",
         tag: "harold-demo",
       });
     }

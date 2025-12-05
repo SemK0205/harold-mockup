@@ -328,7 +328,7 @@ export default function MockupChatsPage() {
                     >
                       {isOurMessage && (
                         <img
-                          src="/SP_logo.png"
+                          src="/harold-mockup/SP_logo.png"
                           alt="Seanergy Partner"
                           className="w-8 h-8 rounded-full object-cover"
                         />

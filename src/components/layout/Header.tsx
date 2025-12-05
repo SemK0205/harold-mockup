@@ -25,7 +25,7 @@ export function Header() {
         <div className="flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-3">
             <img
-              src="/SP_logo.png"
+              src="/harold-mockup/SP_logo.png"
               alt="Seanergy Partner"
               className="w-10 h-10 rounded-full object-cover"
             />
