@@ -637,7 +637,7 @@ export function MockProvider({ children }: MockProviderProps) {
                   const existingQuote = existingContext.quote || {};
 
                   // 여러 필드 업데이트
-                  const updatedQuote = { ...existingQuote };
+                  const updatedQuote: Record<string, string> = { ...existingQuote };
                   let updatedEarliest = existingContext.earliest;
 
                   Object.entries(updates).forEach(([field, value]) => {
