@@ -32,7 +32,7 @@ type SortField = "created_at" | "updated_at" | "vessel_name" | "port" | "deliver
 type SortDirection = "asc" | "desc";
 
 export default function MockupDashboardPage() {
-  const { deals, statistics, isConnected, updateDealStatus, deleteDeal, triggerNewInquiry } = useMockContext();
+  const { deals, statistics, isConnected, updateDealStatus, deleteDeal, triggerNewInquiry, markRoomAsRead } = useMockContext();
 
   const [viewMode, setViewMode] = useState<"table" | "timeline" | "statistics">("table");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -112,6 +112,8 @@ export default function MockupDashboardPage() {
 
   const handleDealClick = (deal: DealScoreboardType) => {
     markAsViewed(deal.session_id);
+    // 읽지 않은 메시지 카운트 초기화
+    markRoomAsRead(deal.customer_room_name);
     setSelectedDealId(deal.session_id);
     setIsModalOpen(true);
   };
@@ -366,13 +368,21 @@ export default function MockupDashboardPage() {
                             </Badge>
                           )}
                           {(deal.buyer_unread_count ?? 0) > 0 && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500 text-white">
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-500 text-white"
+                              title="선주측 읽지 않은 메시지"
+                              style={{ animation: 'scale-ping 1.5s ease-in-out infinite' }}
+                            >
                               <Ship className="w-3.5 h-3.5" />
                               <span className="text-xs font-bold">{deal.buyer_unread_count}</span>
                             </span>
                           )}
                           {(deal.seller_unread_count ?? 0) > 0 && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white"
+                              title="판매측 읽지 않은 메시지"
+                              style={{ animation: 'scale-ping 1.5s ease-in-out infinite' }}
+                            >
                               <Fuel className="w-3.5 h-3.5" />
                               <span className="text-xs font-bold">{deal.seller_unread_count}</span>
                             </span>

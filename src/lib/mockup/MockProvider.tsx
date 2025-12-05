@@ -606,6 +606,54 @@ export function MockProvider({ children }: MockProviderProps) {
         }
       }
 
+      // /api/quick-replies API - 빠른 응답 템플릿
+      if (url.includes('/api/quick-replies') && !url.includes('/send')) {
+        const mockTemplates = [
+          { id: 1, template_text: "잠깐만요", category: "default", sort_order: 1 },
+          { id: 2, template_text: "네 감사합니다", category: "default", sort_order: 2 },
+          { id: 3, template_text: "Rvt", category: "default", sort_order: 3 },
+          { id: 4, template_text: "Rvt Shortly", category: "default", sort_order: 4 },
+        ];
+        return new Response(JSON.stringify({ templates: mockTemplates }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // /api/quick-replies/send API - 빠른 응답 전송
+      if (url.includes('/api/quick-replies/send') && init?.method === 'POST') {
+        try {
+          const body = JSON.parse(init.body as string);
+          const { room_name, template_text } = body;
+
+          const newMessage: ChatMessage = {
+            message_id: Date.now(),
+            room_name: room_name,
+            sender: "Harold AI",
+            message: template_text,
+            package_name: 'com.kakao.yellowid',
+            direction: "outgoing",
+            timestamp: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          };
+
+          setMessages(prev => ({
+            ...prev,
+            [room_name]: [newMessage, ...(prev[room_name] || [])], // 맨 위에 추가
+          }));
+
+          return new Response(JSON.stringify({ success: true, message_id: newMessage.message_id }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch {
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
       // 그 외 API는 원본 fetch 호출 (또는 빈 응답)
       // 목업 모드에서는 대부분의 API가 실패해도 괜찮음
       try {
@@ -626,7 +674,97 @@ export function MockProvider({ children }: MockProviderProps) {
     return () => {
       window.fetch = originalFetch;
     };
-  }, [chatRooms, messages, deals]);
+  }, [chatRooms, messages, deals, aiSuggestions, statistics]);
+
+  // ============================================
+  // Mock EventSource for SSE (useDealsSSE)
+  // ============================================
+  const eventSourceListenersRef = useRef<Set<(deals: DealScoreboard[]) => void>>(new Set());
+
+  useEffect(() => {
+    const OriginalEventSource = window.EventSource;
+
+    // Mock EventSource class
+    class MockEventSource {
+      url: string;
+      readyState: number = 0;
+      onopen: ((event: Event) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      private listeners: Map<string, Set<(event: MessageEvent) => void>> = new Map();
+
+      constructor(url: string) {
+        this.url = url;
+        console.log('[MockProvider] EventSource created for:', url);
+
+        // Simulate connection opening
+        setTimeout(() => {
+          this.readyState = 1;
+          if (this.onopen) {
+            this.onopen(new Event('open'));
+          }
+
+          // Send initial_data event
+          this.dispatchEvent('initial_data', { deals });
+          console.log('[MockProvider] SSE initial_data sent with', deals.length, 'deals');
+
+          // Register listener for future updates
+          const listener = (updatedDeals: DealScoreboard[]) => {
+            this.dispatchEvent('deal_update', { deals: updatedDeals });
+            console.log('[MockProvider] SSE deal_update sent with', updatedDeals.length, 'deals');
+          };
+          eventSourceListenersRef.current.add(listener);
+        }, 100);
+      }
+
+      addEventListener(type: string, listener: (event: MessageEvent) => void) {
+        if (!this.listeners.has(type)) {
+          this.listeners.set(type, new Set());
+        }
+        this.listeners.get(type)!.add(listener);
+      }
+
+      removeEventListener(type: string, listener: (event: MessageEvent) => void) {
+        this.listeners.get(type)?.delete(listener);
+      }
+
+      dispatchEvent(type: string, data: any): boolean {
+        const event = new MessageEvent(type, {
+          data: JSON.stringify(data),
+        });
+
+        const listeners = this.listeners.get(type);
+        if (listeners) {
+          listeners.forEach(listener => listener(event));
+        }
+
+        return true;
+      }
+
+      close() {
+        this.readyState = 2;
+        console.log('[MockProvider] EventSource closed');
+      }
+    }
+
+    // Override global EventSource
+    (window as any).EventSource = MockEventSource;
+
+    return () => {
+      window.EventSource = OriginalEventSource;
+      eventSourceListenersRef.current.clear();
+    };
+  }, []);
+
+  // Emit deal_update events when deals change
+  useEffect(() => {
+    if (eventSourceListenersRef.current.size > 0) {
+      console.log('[MockProvider] Deals changed, notifying', eventSourceListenersRef.current.size, 'SSE listeners');
+      eventSourceListenersRef.current.forEach(listener => {
+        listener(deals);
+      });
+    }
+  }, [deals]);
 
   // Request notification permission on mount
   useEffect(() => {
@@ -698,10 +836,23 @@ export function MockProvider({ children }: MockProviderProps) {
   }, [messages]);
 
   const markRoomAsRead = useCallback((roomName: string) => {
-    // In mock mode, we just update the unread count on related deals
+    // 딜 클릭 시 해당 딜의 buyer_unread_count와 seller_unread_count를 0으로 설정
     setDeals(prev => prev.map(deal => {
       if (deal.customer_room_name === roomName) {
-        return { ...deal, buyer_unread_count: 0, unread_count: deal.seller_unread_count || 0 };
+        return {
+          ...deal,
+          buyer_unread_count: 0,
+          seller_unread_count: 0,
+          unread_count: 0,
+        };
+      }
+      // 판매자 채팅방인 경우에도 처리
+      if (deal.seller_contexts && deal.seller_contexts[roomName]) {
+        return {
+          ...deal,
+          seller_unread_count: Math.max(0, (deal.seller_unread_count || 0) - 1),
+          unread_count: Math.max(0, (deal.unread_count || 0) - 1),
+        };
       }
       return deal;
     }));
@@ -887,7 +1038,8 @@ export function MockProvider({ children }: MockProviderProps) {
 
     // Generate a random quote
     const basePrice = 560 + Math.floor(Math.random() * 30);
-    const quoteMessage = `[견적서]\nVLSFO: $${basePrice}/MT\nBarge Fee: $${12000 + Math.floor(Math.random() * 5000)}\nEarliest: ${deal.delivery_date}\nTerm: 30 days\n\n정유사: ${trader}`;
+    const bargeFee = 12000 + Math.floor(Math.random() * 5000);
+    const quoteMessage = `[견적서]\nVLSFO: $${basePrice}/MT\nBarge Fee: $${bargeFee}\nEarliest: ${deal.delivery_date}\nTerm: 30 days\n\n정유사: ${trader}`;
 
     // Add message to trader room
     const newMessage: ChatMessage = {
@@ -909,13 +1061,16 @@ export function MockProvider({ children }: MockProviderProps) {
     // Update deal with new quote
     setDeals(prev => prev.map(d => {
       if (d.session_id === sessionId) {
+        const existingSeller = d.seller_contexts?.[trader];
+        const isNewQuote = !existingSeller || !existingSeller.quote;
+
         const newSellerContexts = {
           ...d.seller_contexts,
           [trader]: {
             status: "quote_received" as const,
             quote: {
               fuel1_price: `$${basePrice}/MT`,
-              barge_fee: `$${12000 + Math.floor(Math.random() * 5000)}`,
+              barge_fee: `$${bargeFee}`,
               term: "30 days",
               supplier: trader,
             },
@@ -927,8 +1082,9 @@ export function MockProvider({ children }: MockProviderProps) {
         return {
           ...d,
           seller_contexts: newSellerContexts,
-          total_quotes_received: d.total_quotes_received + 1,
-          quote_count: d.quote_count + 1,
+          total_quotes_received: isNewQuote ? d.total_quotes_received + 1 : d.total_quotes_received,
+          quote_count: (d.quote_count || 0) + 1,
+          negotiation_rounds: (d.negotiation_rounds || 0) + 1, // 중요: 라운드 증가
           last_quote_time: new Date().toISOString(),
           seller_unread_count: (d.seller_unread_count || 0) + 1,
           unread_count: (d.unread_count || 0) + 1,
