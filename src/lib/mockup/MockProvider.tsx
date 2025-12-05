@@ -485,29 +485,33 @@ export function MockProvider({ children }: MockProviderProps) {
 
           // Deal의 seller_contexts 업데이트 (Seller Matrix에 추가)
           if (session_id) {
-            setDeals(prev => prev.map(deal => {
-              if (deal.session_id === session_id) {
-                const newSellerContexts = { ...deal.seller_contexts };
-                if (!newSellerContexts[room_name]) {
-                  newSellerContexts[room_name] = {
-                    status: "waiting_quote",
-                    quote: null,
-                    requested_at: new Date().toISOString(),
-                    contacted_at: new Date().toISOString(),
+            setDeals(prev => {
+              const updated = prev.map(deal => {
+                if (deal.session_id === session_id) {
+                  const newSellerContexts = { ...deal.seller_contexts };
+                  if (!newSellerContexts[room_name]) {
+                    newSellerContexts[room_name] = {
+                      status: "waiting_quote",
+                      quote: null,
+                      requested_at: new Date().toISOString(),
+                      contacted_at: new Date().toISOString(),
+                    };
+                  } else if (!newSellerContexts[room_name].contacted_at) {
+                    newSellerContexts[room_name].contacted_at = new Date().toISOString();
+                  }
+                  const updatedDeal = {
+                    ...deal,
+                    seller_contexts: newSellerContexts,
+                    requested_traders: [...new Set([...(deal.requested_traders || []), room_name])],
+                    stage: 'deal_started' as const,
                   };
-                } else if (!newSellerContexts[room_name].contacted_at) {
-                  newSellerContexts[room_name].contacted_at = new Date().toISOString();
+                  console.log('[MockProvider] Updated deal:', updatedDeal.session_id, 'new seller_contexts keys:', Object.keys(updatedDeal.seller_contexts));
+                  return updatedDeal;
                 }
-                return {
-                  ...deal,
-                  seller_contexts: newSellerContexts,
-                  requested_traders: [...new Set([...(deal.requested_traders || []), room_name])],
-                  stage: 'deal_started',
-                };
-              }
-              return deal;
-            }));
-            console.log('[MockProvider] Updated deal seller_contexts for session:', session_id);
+                return deal;
+              });
+              return updated;
+            });
           }
 
           // 메시지 추가
