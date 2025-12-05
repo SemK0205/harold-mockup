@@ -366,17 +366,26 @@ export function MockProvider({ children }: MockProviderProps) {
       if (url.includes('/ai-suggestions/approve') && init?.method === 'POST') {
         try {
           const body = JSON.parse(init.body as string);
-          const { suggestion_id, selected_targets, modified_message } = body;
+          const { selected_targets, modified_message } = body;
+
+          // suggestion_id는 URL 쿼리 파라미터에서 추출
+          const urlObj = new URL(url);
+          const suggestionIdStr = urlObj.searchParams.get('suggestion_id');
+          const suggestion_id = suggestionIdStr ? parseInt(suggestionIdStr) : null;
 
           // selected_targets 형식: { "1": ["SunPetro Energy", "SeaFuel Korea"] }
           const targetRooms = Object.values(selected_targets || {}).flat() as string[];
 
+          console.log('[MockProvider] AI Approve:', { suggestion_id, targetRooms, modified_message });
+
           // Suggestion에서 room_name 찾기, 그 room_name으로 deal 찾기
           const allSuggestions = Object.values(aiSuggestions).flat();
-          const suggestion = allSuggestions.find(s => s.id === suggestion_id);
+          const suggestion = suggestion_id ? allSuggestions.find(s => s.id === suggestion_id) : null;
           const roomName = suggestion?.room_name;
           const deal = roomName ? deals.find(d => d.customer_room_name === roomName) : null;
           const sessionId = deal?.session_id;
+
+          console.log('[MockProvider] Found:', { suggestion, roomName, deal, sessionId });
 
           // 즉시 성공 응답
           const response = new Response(JSON.stringify({ success: true }), {
