@@ -548,13 +548,59 @@ export function MockProvider({ children }: MockProviderProps) {
             headers: { 'Content-Type': 'application/json' },
           });
 
-          // 5-10초 후 판매자가 확인 메시지 보내기 (시뮬레이션)
+          // 3-7초 후 판매자가 답변하고 seller_contexts 업데이트 (시뮬레이션)
           setTimeout(() => {
+            // 질문 내용 분석
+            const msgLower = message.toLowerCase();
+            let replyText = "Received. Let me check and get back to you shortly.";
+            let updateField: string | null = null;
+            let updateValue: string | null = null;
+
+            // 가격 질문
+            if (msgLower.includes('가격') || msgLower.includes('price')) {
+              const basePrice = 565 + Math.floor(Math.random() * 25);
+              replyText = `$${basePrice}/MT`;
+              updateField = 'fuel1_price';
+              updateValue = `$${basePrice}/MT`;
+            }
+            // 바지피 질문
+            else if (msgLower.includes('바지피') || msgLower.includes('barge')) {
+              const bargeFee = 12000 + Math.floor(Math.random() * 5000);
+              replyText = `$${bargeFee}`;
+              updateField = 'barge_fee';
+              updateValue = `$${bargeFee}`;
+            }
+            // 얼리 질문
+            else if (msgLower.includes('얼리') || msgLower.includes('earliest')) {
+              const today = new Date();
+              const earliest = new Date(today.getTime() + (2 + Math.floor(Math.random() * 3)) * 24 * 60 * 60 * 1000);
+              const dateStr = earliest.toISOString().split('T')[0];
+              replyText = dateStr;
+              updateField = 'earliest';
+              updateValue = dateStr;
+            }
+            // 서플 질문
+            else if (msgLower.includes('서플') || msgLower.includes('supplier')) {
+              const suppliers = ['Hyundai Oilbank', 'SK Energy', 'S-Oil', 'GS Caltex'];
+              const supplier = suppliers[Math.floor(Math.random() * suppliers.length)];
+              replyText = supplier;
+              updateField = 'supplier';
+              updateValue = supplier;
+            }
+            // 텀 질문
+            else if (msgLower.includes('텀') || msgLower.includes('term') || msgLower.includes('payment')) {
+              const terms = ['30 days', '45 days', '60 days', 'Cash'];
+              const term = terms[Math.floor(Math.random() * terms.length)];
+              replyText = term;
+              updateField = 'term';
+              updateValue = term;
+            }
+
             const replyMsg: ChatMessage = {
               message_id: Date.now() + 1,
               room_name: room_name,
               sender: room_name,
-              message: "Received. Let me check and get back to you shortly.",
+              message: replyText,
               package_name: package_name || 'com.kakao.talk',
               direction: "incoming",
               timestamp: new Date().toISOString(),
@@ -563,13 +609,43 @@ export function MockProvider({ children }: MockProviderProps) {
 
             setMessages(prev => {
               const existing = prev[room_name] || [];
-              // outgoing 메시지 바로 다음에 추가
               return {
                 ...prev,
-                [room_name]: [existing[0], replyMsg, ...existing.slice(1)],
+                [room_name]: [replyMsg, ...(existing || [])],
               };
             });
-          }, 5000 + Math.random() * 5000);
+
+            // seller_contexts 업데이트
+            if (updateField && updateValue) {
+              setDeals(prev => prev.map(deal => {
+                if (deal.seller_contexts && deal.seller_contexts[room_name]) {
+                  const updatedContext = {
+                    ...deal.seller_contexts[room_name],
+                    quote: {
+                      ...deal.seller_contexts[room_name].quote,
+                      [updateField]: updateValue,
+                    },
+                  };
+                  if (updateField === 'earliest') {
+                    updatedContext.earliest = updateValue;
+                  }
+                  const newSellerContexts = {
+                    ...deal.seller_contexts,
+                    [room_name]: updatedContext,
+                  };
+
+                  // Deal Store도 업데이트
+                  setSellerContexts(deal.session_id, newSellerContexts);
+
+                  return {
+                    ...deal,
+                    seller_contexts: newSellerContexts,
+                  };
+                }
+                return deal;
+              }));
+            }
+          }, 3000 + Math.random() * 4000);
 
           return response;
         } catch {
