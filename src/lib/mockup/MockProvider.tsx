@@ -615,10 +615,18 @@ export function MockProvider({ children }: MockProviderProps) {
               };
             });
 
-            // seller_contexts 업데이트
+            // seller_contexts 업데이트 (시뮬레이션 - 채팅 답변 온 후에만)
             if (updateField && updateValue) {
+              // session_id가 있는 경우만 업데이트 (셀 클릭 질문)
+              // session_id 없으면 일반 채팅이므로 업데이트하지 않음
+              if (!session_id) {
+                console.log('[MockProvider] No session_id, skipping seller_contexts update');
+                return;
+              }
+
               setDeals(prev => prev.map(deal => {
-                if (deal.seller_contexts && deal.seller_contexts[room_name]) {
+                // 특정 session만 업데이트
+                if (deal.session_id === session_id && deal.seller_contexts && deal.seller_contexts[room_name]) {
                   const updatedContext = {
                     ...deal.seller_contexts[room_name],
                     quote: {
@@ -636,6 +644,7 @@ export function MockProvider({ children }: MockProviderProps) {
 
                   // Deal Store도 업데이트
                   setSellerContexts(deal.session_id, newSellerContexts);
+                  console.log('[MockProvider] Updated seller_contexts for session:', session_id, 'trader:', room_name, 'field:', updateField);
 
                   return {
                     ...deal,

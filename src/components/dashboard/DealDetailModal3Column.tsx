@@ -1204,7 +1204,7 @@ const SellerQuoteComparisonTable = memo(() => {
     };
     addSellerMessage(trader, message);
 
-    // 백엔드로 전송
+    // 백엔드로 전송 (session_id 포함 - 자동 답변 시뮬레이션용)
     try {
       await fetch(`${getApiUrl()}/messages/send`, {
         method: 'POST',
@@ -1212,7 +1212,8 @@ const SellerQuoteComparisonTable = memo(() => {
         body: JSON.stringify({
           room_name: trader,
           message: question,
-          platform: internalPlatform
+          platform: internalPlatform,
+          session_id: session?.session_id, // 자동 답변 시뮬레이션에서 특정 딜만 업데이트하기 위함
         })
       });
     } catch (error) {
