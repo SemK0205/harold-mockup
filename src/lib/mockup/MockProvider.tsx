@@ -477,7 +477,36 @@ export function MockProvider({ children }: MockProviderProps) {
       if (url.includes('/api/outgoing/send') && init?.method === 'POST') {
         try {
           const body = JSON.parse(init.body as string);
-          const { room_name, message: msgText, package_name } = body;
+          const { room_name, message: msgText, package_name, session_id } = body;
+
+          console.log('[MockProvider] Outgoing send:', { room_name, session_id, msgText });
+
+          // Deal의 seller_contexts 업데이트 (Seller Matrix에 추가)
+          if (session_id) {
+            setDeals(prev => prev.map(deal => {
+              if (deal.session_id === session_id) {
+                const newSellerContexts = { ...deal.seller_contexts };
+                if (!newSellerContexts[room_name]) {
+                  newSellerContexts[room_name] = {
+                    status: "waiting_quote",
+                    quote: null,
+                    requested_at: new Date().toISOString(),
+                    contacted_at: new Date().toISOString(),
+                  };
+                } else if (!newSellerContexts[room_name].contacted_at) {
+                  newSellerContexts[room_name].contacted_at = new Date().toISOString();
+                }
+                return {
+                  ...deal,
+                  seller_contexts: newSellerContexts,
+                  requested_traders: [...new Set([...(deal.requested_traders || []), room_name])],
+                  stage: 'deal_started',
+                };
+              }
+              return deal;
+            }));
+            console.log('[MockProvider] Updated deal seller_contexts for session:', session_id);
+          }
 
           // 메시지 추가
           const outgoingMsg: ChatMessage = {
