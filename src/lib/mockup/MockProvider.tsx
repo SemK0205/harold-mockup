@@ -555,22 +555,21 @@ export function MockProvider({ children }: MockProviderProps) {
             // 질문 내용 분석
             const msgLower = msgText.toLowerCase();
             let replyText = "Received. Let me check and get back to you shortly.";
-            let updateField: string | null = null;
-            let updateValue: string | null = null;
+            const updates: Record<string, string> = {}; // 여러 필드 업데이트 지원
 
             // 가격 질문
             if (msgLower.includes('가격') || msgLower.includes('price')) {
               const basePrice = 565 + Math.floor(Math.random() * 25);
-              replyText = `$${basePrice}/MT`;
-              updateField = 'fuel1_price';
-              updateValue = `$${basePrice}/MT`;
+              const bargeFee = 12000 + Math.floor(Math.random() * 5000);
+              replyText = `${basePrice}+${bargeFee}`;
+              updates['fuel1_price'] = `${basePrice}`;
+              updates['barge_fee'] = `${bargeFee}`;
             }
             // 바지피 질문
             else if (msgLower.includes('바지피') || msgLower.includes('barge')) {
               const bargeFee = 12000 + Math.floor(Math.random() * 5000);
               replyText = `$${bargeFee}`;
-              updateField = 'barge_fee';
-              updateValue = `$${bargeFee}`;
+              updates['barge_fee'] = `${bargeFee}`;
             }
             // 얼리 질문
             else if (msgLower.includes('얼리') || msgLower.includes('earliest')) {
@@ -578,24 +577,21 @@ export function MockProvider({ children }: MockProviderProps) {
               const earliest = new Date(today.getTime() + (2 + Math.floor(Math.random() * 3)) * 24 * 60 * 60 * 1000);
               const dateStr = earliest.toISOString().split('T')[0];
               replyText = dateStr;
-              updateField = 'earliest';
-              updateValue = dateStr;
+              updates['earliest'] = dateStr;
             }
             // 서플 질문
             else if (msgLower.includes('서플') || msgLower.includes('supplier')) {
               const suppliers = ['Hyundai Oilbank', 'SK Energy', 'S-Oil', 'GS Caltex'];
               const supplier = suppliers[Math.floor(Math.random() * suppliers.length)];
               replyText = supplier;
-              updateField = 'supplier';
-              updateValue = supplier;
+              updates['supplier'] = supplier;
             }
             // 텀 질문
             else if (msgLower.includes('텀') || msgLower.includes('term') || msgLower.includes('payment')) {
               const terms = ['30 days', '45 days', '60 days', 'Cash'];
               const term = terms[Math.floor(Math.random() * terms.length)];
               replyText = term;
-              updateField = 'term';
-              updateValue = term;
+              updates['term'] = term;
             }
 
             const replyMsg: ChatMessage = {
@@ -609,7 +605,7 @@ export function MockProvider({ children }: MockProviderProps) {
               created_at: new Date().toISOString(),
             };
 
-            console.log('[MockProvider] Auto-reply generated:', { room_name, replyText, updateField, updateValue, session_id });
+            console.log('[MockProvider] Auto-reply generated:', { room_name, replyText, updates, session_id });
 
             setMessages(prev => {
               const existing = prev[room_name] || [];
@@ -620,7 +616,7 @@ export function MockProvider({ children }: MockProviderProps) {
             });
 
             // seller_contexts 업데이트 (시뮬레이션 - 채팅 답변 온 후에만)
-            if (updateField && updateValue) {
+            if (Object.keys(updates).length > 0) {
               // session_id가 있는 경우만 업데이트 (셀 클릭 질문)
               // session_id 없으면 일반 채팅이므로 업데이트하지 않음
               if (!session_id) {
@@ -628,7 +624,7 @@ export function MockProvider({ children }: MockProviderProps) {
                 return;
               }
 
-              console.log('[MockProvider] Starting seller_contexts update. Target session:', session_id, 'trader:', room_name, 'field:', updateField);
+              console.log('[MockProvider] Starting seller_contexts update. Target session:', session_id, 'trader:', room_name, 'fields:', Object.keys(updates));
 
               let updateCount = 0;
               setDeals(prev => prev.map(deal => {
@@ -640,18 +636,23 @@ export function MockProvider({ children }: MockProviderProps) {
                   const existingContext = deal.seller_contexts[room_name];
                   const existingQuote = existingContext.quote || {};
 
+                  // 여러 필드 업데이트
+                  const updatedQuote = { ...existingQuote };
+                  let updatedEarliest = existingContext.earliest;
+
+                  Object.entries(updates).forEach(([field, value]) => {
+                    if (field === 'earliest') {
+                      updatedEarliest = value;
+                    } else {
+                      updatedQuote[field] = value;
+                    }
+                  });
+
                   const updatedContext = {
                     ...existingContext,
-                    quote: {
-                      ...existingQuote,
-                      [updateField]: updateValue,
-                    },
+                    quote: updatedQuote,
+                    earliest: updatedEarliest,
                   };
-
-                  // earliest는 context 바로 아래에도 저장
-                  if (updateField === 'earliest') {
-                    updatedContext.earliest = updateValue;
-                  }
 
                   const newSellerContexts = {
                     ...deal.seller_contexts,
@@ -660,7 +661,7 @@ export function MockProvider({ children }: MockProviderProps) {
 
                   // Deal Store도 업데이트
                   setSellerContexts(deal.session_id, newSellerContexts);
-                  console.log('[MockProvider] Updated seller_contexts for session:', session_id, 'trader:', room_name, 'field:', updateField, 'value:', updateValue);
+                  console.log('[MockProvider] Updated seller_contexts for session:', session_id, 'trader:', room_name, 'updates:', updates);
 
                   return {
                     ...deal,
