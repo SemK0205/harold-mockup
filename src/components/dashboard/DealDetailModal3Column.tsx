@@ -2050,12 +2050,20 @@ const AIAssistantColumn = memo(() => {
 
   // 제안 승인 및 전송
   const handleApproveSuggestion = async (suggestion: AISuggestion, optionIndex: number, customMessage?: string) => {
-    if (!session || isProcessing) return;
+    console.log('[AI Approve] START - suggestion:', suggestion.id, 'optionIndex:', optionIndex, 'isProcessing:', isProcessing, 'hasSession:', !!session);
+
+    if (!session || isProcessing) {
+      console.log('[AI Approve] EARLY RETURN - session:', !!session, 'isProcessing:', isProcessing);
+      return;
+    }
     setIsProcessing(true);
 
     try {
       const option = suggestion.suggestions[optionIndex];
-      if (!option) return;
+      if (!option) {
+        console.log('[AI Approve] No option found at index:', optionIndex);
+        return;
+      }
 
       const messageToSend = customMessage || option.message;
 
@@ -2406,11 +2414,18 @@ const AIAssistantColumn = memo(() => {
                           size="sm"
                           className="flex-1"
                           onClick={async () => {
+                            console.log('[Inquiry Sender] Send button clicked');
                             const selectedRooms = selectedTraderRooms.get('inquiry') || new Set();
-                            if (selectedRooms.size === 0 || !editingMessage.trim()) return;
+                            console.log('[Inquiry Sender] Selected rooms:', Array.from(selectedRooms), 'message:', editingMessage);
+
+                            if (selectedRooms.size === 0 || !editingMessage.trim()) {
+                              console.log('[Inquiry Sender] Validation failed - no rooms or no message');
+                              return;
+                            }
 
                             setIsProcessing(true);
                             try {
+                              console.log('[Inquiry Sender] Sending to', selectedRooms.size, 'traders');
                               // 선택된 트레이더들에게 메시지 전송
                               for (const roomName of selectedRooms) {
                                 const trader = allTraders.find(t => t.room_name === roomName);
