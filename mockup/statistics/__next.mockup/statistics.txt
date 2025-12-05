@@ -1,4 +1,4 @@
 1:"$Sreact.fragment"
 2:I[39756,["/harold-mockup/_next/static/chunks/ff1a16fafef87110.js","/harold-mockup/_next/static/chunks/64c0a5e3a0354479.js"],"default"]
 3:I[37457,["/harold-mockup/_next/static/chunks/ff1a16fafef87110.js","/harold-mockup/_next/static/chunks/64c0a5e3a0354479.js"],"default"]
-0:{"buildId":"-sxqhjetOlWRUgMQRw2bq","rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"loading":null,"isPartial":false}
+0:{"buildId":"vTiRzcb7E26pPsGCDD2wB","rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"loading":null,"isPartial":false}
