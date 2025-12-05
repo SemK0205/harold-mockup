@@ -626,9 +626,15 @@ export function MockProvider({ children }: MockProviderProps) {
                 return;
               }
 
+              console.log('[MockProvider] Starting seller_contexts update. Target session:', session_id, 'trader:', room_name, 'field:', updateField);
+
+              let updateCount = 0;
               setDeals(prev => prev.map(deal => {
                 // 특정 session만 업데이트
                 if (deal.session_id === session_id && deal.seller_contexts && deal.seller_contexts[room_name]) {
+                  updateCount++;
+                  console.log('[MockProvider] MATCH #' + updateCount + '! Deal:', deal.session_id, 'vessel:', deal.vessel_name, 'customer:', deal.customer_room_name);
+
                   const existingContext = deal.seller_contexts[room_name];
                   const existingQuote = existingContext.quote || {};
 
@@ -661,6 +667,8 @@ export function MockProvider({ children }: MockProviderProps) {
                 }
                 return deal;
               }));
+
+              console.log('[MockProvider] seller_contexts update complete. Total deals updated:', updateCount);
             }
           }, 3000 + Math.random() * 4000);
 
