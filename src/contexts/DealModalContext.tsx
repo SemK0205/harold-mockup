@@ -113,6 +113,30 @@ export function DealModalProvider({ children, session: initialSession }: DealMod
   const [sellerTabs, setSellerTabs] = useState<string[]>([]);
   const [sellerMessages, setSellerMessages] = useState<Map<string, ChatMessage[]>>(new Map());
 
+  // MockProvider의 메시지 변경 감지하여 실시간 업데이트
+  useEffect(() => {
+    if (sellerTabs.length === 0) return;
+
+    // 모든 seller tabs의 메시지를 MockProvider에서 가져와서 업데이트
+    const interval = setInterval(() => {
+      sellerTabs.forEach(trader => {
+        const latestMessages = getMessagesForRoom(trader);
+        setSellerMessages(prev => {
+          const currentMessages = prev.get(trader) || [];
+          // 메시지 수가 다르거나 내용이 다르면 업데이트
+          if (latestMessages.length !== currentMessages.length) {
+            const newMap = new Map(prev);
+            newMap.set(trader, latestMessages);
+            return newMap;
+          }
+          return prev;
+        });
+      });
+    }, 500); // 0.5초마다 체크
+
+    return () => clearInterval(interval);
+  }, [sellerTabs, getMessagesForRoom]);
+
   // 전역 store에서 seller_contexts 구독
   const storeSellerContexts = useDealStore(
     (state) => session?.session_id ? state.sellerContextsBySession.get(session.session_id) : undefined
