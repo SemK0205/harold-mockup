@@ -120,6 +120,11 @@ export function MockProvider({ children }: MockProviderProps) {
     const mockFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
+      // Next.js 내부 요청은 가로채지 않고 원본 fetch 사용
+      if (url.includes('_rsc=') || url.includes('__next') || url.includes('.txt?')) {
+        return originalFetch(input, init);
+      }
+
       console.log('[MockProvider] Fetch intercepted:', url, 'method:', init?.method);
 
       // /chats/rooms API - 채팅방 목록
