@@ -3552,6 +3552,10 @@ const SellerChatRoom = memo(({
         <QuickReplyButtons
           roomName={trader}
           className="pb-1"
+          onSend={(text) => {
+            onInputChange(text);
+            setTimeout(() => onSend(), 0);
+          }}
         />
         <div className="flex gap-2">
           <Input
